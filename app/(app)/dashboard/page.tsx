@@ -36,6 +36,11 @@ async function getDashboard(): Promise<DashboardData> {
   // Send the user's tz offset so server-side pace flags use local time.
   const tzOffset = new Date().getTimezoneOffset();
   const res = await fetch(`/api/dashboard?tzOffset=${tzOffset}`);
+  if (res.status === 409) {
+    // Authenticated but no profile yet — route through onboarding.
+    if (typeof window !== "undefined") window.location.href = "/onboarding";
+    throw new Error("no_profile");
+  }
   if (!res.ok) throw new Error("dashboard_failed");
   return res.json();
 }

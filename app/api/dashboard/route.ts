@@ -12,10 +12,13 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   // Day + pace both keyed to the USER's timezone, never the server's.
-  const user = await prisma.user.findUniqueOrThrow({
+  const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { timezone: true, cutDelta: true, bulkDelta: true },
   });
+  // Defensive: authenticated but no profile row (e.g. onboarding skipped/failed).
+  // Signal the client to send them through onboarding instead of 500-ing.
+  if (!user) return NextResponse.json({ error: "no_profile" }, { status: 409 });
   const today = localDateOnly(user.timezone);
 
   const [target, todayLog, agg] = await Promise.all([

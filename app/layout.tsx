@@ -5,10 +5,10 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MacroDelta",
-  description: "Adaptive calorie tracking with a rolling Fitbit maintenance baseline.",
+  title: "Optima",
+  description: "Adaptive calorie tracking with a rolling wearable maintenance baseline.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "MacroDelta", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Optima", statusBarStyle: "black-translucent" },
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },

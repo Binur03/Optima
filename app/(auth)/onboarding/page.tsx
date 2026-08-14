@@ -51,7 +51,7 @@ export default function OnboardingPage() {
 
   return (
     <main className="onboarding">
-      <h1>Set up MacroDelta</h1>
+      <h1>Set up Optima</h1>
 
       <section className="ob-step">
         <h2>1 · Your goal</h2>

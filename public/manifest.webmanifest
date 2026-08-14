@@ -1,7 +1,7 @@
 {
-  "name": "MacroDelta",
-  "short_name": "MacroDelta",
-  "description": "Adaptive calorie tracking with a rolling Fitbit maintenance baseline.",
+  "name": "Optima",
+  "short_name": "Optima",
+  "description": "Adaptive calorie tracking with a rolling wearable maintenance baseline.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0b0f14",

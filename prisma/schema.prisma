@@ -1,0 +1,97 @@
+// MacroDelta — Prisma schema (PostgreSQL)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (pgbouncer, 6543) for app runtime
+  directUrl = env("DIRECT_URL")   // direct (5432) for migrations / db push
+}
+
+enum Goal {
+  CUT
+  MAINTAIN
+  BULK
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum LogSource {
+  AI_IMAGE
+  MANUAL
+  TEXT_SEARCH
+}
+
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  goal       Goal      @default(MAINTAIN)
+  goalDelta  Int       @default(0) @map("goal_delta") // active applied delta
+  cutDelta   Int       @default(-500) @map("cut_delta")  // user's custom Cut offset
+  bulkDelta  Int       @default(300) @map("bulk_delta")  // user's custom Bulk offset
+  timezone   String    @default("UTC") // IANA tz, e.g. America/Los_Angeles
+  heightCm   Int?      @map("height_cm")
+  weightKg   Decimal?  @map("weight_kg") @db.Decimal(5, 2)
+  sex        Sex?
+  birthDate  DateTime? @map("birth_date") @db.Date
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  fitbitToken FitbitToken?
+  dailyLogs   DailyLog[]
+  foodLogs    FoodLog[]
+
+  @@map("users")
+}
+
+model FitbitToken {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken          String   @map("access_token")  // encrypted at rest
+  refreshToken         String   @map("refresh_token")  // encrypted at rest
+  scope                String
+  fitbitUserId         String   @map("fitbit_user_id")
+  accessTokenExpiresAt DateTime @map("access_token_expires_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("fitbit_tokens")
+}
+
+model DailyLog {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logDate           DateTime @map("log_date") @db.Date
+  caloriesOut       Int?     @map("calories_out")
+  steps             Int?
+  activeZoneMinutes Int?     @map("active_zone_minutes")
+  syncedAt          DateTime @default(now()) @map("synced_at")
+
+  @@unique([userId, logDate])
+  @@index([userId, logDate])
+  @@map("daily_logs")
+}
+
+model FoodLog {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logDate     DateTime  @map("log_date") @db.Date
+  foodName    String    @map("food_name")
+  calories    Int
+  proteinG    Decimal   @default(0) @map("protein_g") @db.Decimal(6, 2)
+  carbsG      Decimal   @default(0) @map("carbs_g")   @db.Decimal(6, 2)
+  fatG        Decimal   @default(0) @map("fat_g")     @db.Decimal(6, 2)
+  source      LogSource @default(AI_IMAGE)
+  aiEstimated Boolean   @default(false) @map("ai_estimated")
+  imageUrl    String?   @map("image_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, logDate])
+  @@map("food_logs")
+}

@@ -165,6 +165,14 @@ input { font: inherit; }
 .log-image-preview { display: flex; flex-direction: column; gap: 8px; }
 .log-image-preview img { width: 100%; max-height: 220px; object-fit: cover; border-radius: var(--radius); }
 
+/* Quick Log (natural language + voice) */
+.quick-log { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.quick-log h2 { margin: 0; color: var(--text); font-size: 1rem; }
+.quick-log-input { display: flex; gap: 8px; align-items: stretch; }
+.quick-log-input textarea { flex: 1; padding: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); resize: vertical; font: inherit; min-height: 68px; }
+.mic-btn { flex: 0 0 auto; min-width: 48px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font-size: 1.1rem; }
+.mic-btn.mic-listening { background: var(--over); color: #fff; border-color: var(--over); font-size: 0.75rem; font-weight: 600; animation: pulse 1.2s infinite; }
+
 .dash-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
 .sync-chip { font-size: 0.75rem; color: var(--muted); }
 .dash-footer button { padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); }

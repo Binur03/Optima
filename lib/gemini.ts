@@ -187,3 +187,60 @@ export async function suggestMeals(remaining: {
         .slice(0, 3)
     : [];
 }
+
+// ---------- Natural-language / voice: multi-item extraction ----------
+const ITEMS_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    items: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          food_name: { type: SchemaType.STRING },
+          estimated_calories: { type: SchemaType.NUMBER },
+          protein_g: { type: SchemaType.NUMBER },
+          carbs_g: { type: SchemaType.NUMBER },
+          fat_g: { type: SchemaType.NUMBER },
+        },
+        required: ["food_name", "estimated_calories", "protein_g", "carbs_g", "fat_g"],
+      },
+    },
+  },
+  required: ["items"],
+} as const;
+
+const NLP_PROMPT = (text: string) =>
+  "You are a nutritional extraction engine. Read the user's meal description and split " +
+  "it into individual food items. For EACH item, estimate calories, protein_g, carbs_g, " +
+  "and fat_g for the portion described (assume one standard serving when the amount is " +
+  'unspecified). Use standard nutrition data. Return numbers only — no ranges, no units. ' +
+  `Meal: "${text}"`;
+
+// Parses a free-text/dictated meal into one estimate per food item.
+export async function analyzeMealItems(text: string): Promise<MacroEstimate[]> {
+  const run = async (modelId: string): Promise<string> => {
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: ITEMS_SCHEMA as unknown as object,
+      },
+    });
+    return (await model.generateContent(NLP_PROMPT(text))).response.text();
+  };
+
+  let raw: string;
+  try {
+    raw = await run(GEMINI_MODEL_ID);
+  } catch (err) {
+    if (isModelNotFound(err)) raw = await run(GEMINI_FALLBACK_MODEL_ID);
+    else throw err;
+  }
+
+  const parsed = JSON.parse(raw) as { items?: MacroEstimate[] };
+  const items = Array.isArray(parsed.items) ? parsed.items.map(sanitize) : [];
+  // Drop empty/zeroed items (e.g. "a black coffee" → all ~0 is fine to keep only
+  // if it has a name; but drop rows with no name).
+  return items.filter((i) => i.food_name && i.food_name !== "Unknown item");
+}

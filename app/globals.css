@@ -60,6 +60,13 @@ input { font: inherit; }
 /* ---------- Dashboard ---------- */
 .dashboard { display: flex; flex-direction: column; gap: 16px; }
 .dash-header { display: flex; flex-direction: column; gap: 8px; }
+.dash-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.streak { font-size: 0.95rem; font-weight: 800; color: var(--burn); background: rgba(255,122,69,0.12); border: 1px solid rgba(255,122,69,0.3); padding: 4px 12px; border-radius: 999px; }
+
+.insight-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.insight-card h2 { margin: 0; color: var(--text); font-size: 1rem; }
+.insight-text { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--text); }
+.insight-muted { margin: 0; font-size: 0.85rem; color: var(--muted); }
 .tdee-badge { font-size: 0.8rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px; align-self: flex-start; }
 .tdee-badge.tdee-estimating { color: var(--warn); }
 .tdee-badge.tdee-cold { color: var(--accent); }

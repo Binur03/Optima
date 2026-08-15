@@ -244,3 +244,41 @@ export async function analyzeMealItems(text: string): Promise<MacroEstimate[]> {
   // if it has a name; but drop rows with no name).
   return items.filter((i) => i.food_name && i.food_name !== "Unknown item");
 }
+
+// ---------- Weekly AI coaching insight ----------
+export interface WeeklyStat {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export async function weeklyInsight(payload: {
+  calorieTarget: number;
+  macroTargets: { protein: number; carbs: number; fat: number };
+  days: WeeklyStat[];
+}): Promise<string> {
+  const prompt =
+    "You are an empathetic, encouraging fitness coach reviewing a user's week. " +
+    `Daily calorie target: ${payload.calorieTarget}. Macro targets: ` +
+    `${payload.macroTargets.protein}g protein, ${payload.macroTargets.carbs}g carbs, ` +
+    `${payload.macroTargets.fat}g fat. Their last 7 days (actuals): ` +
+    `${JSON.stringify(payload.days)}. In 2-3 warm, specific sentences, call out ONE ` +
+    "genuine positive trend (reference real numbers, e.g. days they hit protein) and ONE " +
+    "area to improve. No preamble, no bullet points — just the encouraging note.";
+
+  const run = async (modelId: string): Promise<string> => {
+    const model = genAI.getGenerativeModel({ model: modelId });
+    return (await model.generateContent(prompt)).response.text();
+  };
+
+  let text: string;
+  try {
+    text = await run(GEMINI_MODEL_ID);
+  } catch (err) {
+    if (isModelNotFound(err)) text = await run(GEMINI_FALLBACK_MODEL_ID);
+    else throw err;
+  }
+  return text.trim();
+}

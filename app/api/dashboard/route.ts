@@ -4,6 +4,7 @@ import { computeTarget } from "@/lib/tdee";
 import { computeDelta, eatingDayFraction } from "@/lib/delta";
 import { localDateOnly, localHourInTimeZone } from "@/lib/datetime";
 import { defaultMacroTargets } from "@/lib/nutrition";
+import { computeStreak } from "@/lib/gamification";
 import { getCurrentUserId } from "@/lib/auth";
 
 // GET /api/dashboard — one call for the three hero metrics + Delta.
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "no_profile" }, { status: 409 });
   const today = localDateOnly(user.timezone);
 
-  const [target, todayLog, agg] = await Promise.all([
+  const [target, todayLog, agg, streak] = await Promise.all([
     computeTarget(userId, today),
     prisma.dailyLog.findUnique({
       where: { userId_logDate: { userId, logDate: today } },
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
       where: { userId, logDate: today },
       _sum: { calories: true, proteinG: true, carbsG: true, fatG: true },
     }),
+    computeStreak(userId, user.timezone),
   ]);
 
   const eaten = agg._sum.calories ?? 0;
@@ -60,6 +62,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     hasWearable: user.hasWearable,
+    streak,
     macroTargets,
     burnedToday: todayLog?.caloriesOut ?? null,
     steps: todayLog?.steps ?? null,

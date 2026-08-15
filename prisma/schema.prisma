@@ -53,6 +53,10 @@ model User {
   targetCarbs   Int? @map("target_carbs")
   targetFat     Int? @map("target_fat")
 
+  // Cached weekly AI coaching insight (regenerated at most once/week).
+  weeklyInsight   String?   @map("weekly_insight")
+  weeklyInsightAt DateTime? @map("weekly_insight_at")
+
   fitbitToken FitbitToken?
   dailyLogs   DailyLog[]
   foodLogs    FoodLog[]

@@ -27,8 +27,20 @@ interface DashboardData {
   cutDelta: number;
   bulkDelta: number;
   hasWearable: boolean;
+  streak: number;
   macroTargets: { protein: number; carbs: number; fat: number } | null;
   delta: DeltaResult;
+}
+
+interface WeeklyInsight {
+  insight: string | null;
+  message?: string;
+}
+
+async function getInsight(): Promise<WeeklyInsight> {
+  const res = await fetch("/api/insights/weekly");
+  if (!res.ok) return { insight: null };
+  return res.json();
 }
 
 function deltaForGoal(goal: Goal, cutDelta: number, bulkDelta: number): number {
@@ -142,6 +154,11 @@ export default function DashboardPage() {
     queryFn: getRecents,
     staleTime: 60_000,
   });
+  const { data: weekly, isLoading: weeklyLoading } = useQuery({
+    queryKey: ["weekly-insight"],
+    queryFn: getInsight,
+    staleTime: 1000 * 60 * 60, // server caches ~1 week; this just avoids refetch spam
+  });
   const quickLog = useMutation({
     mutationFn: async (m: RecentMeal) => {
       const res = await fetch("/api/food/log", {
@@ -200,7 +217,14 @@ export default function DashboardPage() {
   return (
     <main className="dashboard">
       <header className="dash-header">
-        <h1>Today</h1>
+        <div className="dash-title-row">
+          <h1>Today</h1>
+          {data.streak > 0 && (
+            <span className="streak" title={`${data.streak}-day logging streak`}>
+              🔥 {data.streak}
+            </span>
+          )}
+        </div>
         <TdeeBadge
           value={data.tdee.value}
           daysUsed={data.tdee.daysUsed}
@@ -329,6 +353,17 @@ export default function DashboardPage() {
               : `${data.goalDelta >= 0 ? "+" : ""}${data.goalDelta} vs maintenance`
           }
         />
+      </section>
+
+      <section className="insight-card">
+        <h2>🧠 Weekly AI Review</h2>
+        {weekly?.insight ? (
+          <p className="insight-text">{weekly.insight}</p>
+        ) : (
+          <p className="insight-muted">
+            {weeklyLoading ? "Generating your weekly review…" : weekly?.message ?? "Log a few days to unlock your weekly review."}
+          </p>
+        )}
       </section>
 
       <section className="quick-add">

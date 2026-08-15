@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { browserSupabase, supabaseConfigured } from "@/lib/supabase";
 
 export default function LoginPage() {
@@ -14,7 +14,6 @@ export default function LoginPage() {
 }
 
 function LoginInner() {
-  const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";
 
@@ -39,12 +38,13 @@ function LoginInner() {
         if (error) return setError(error.message);
         // If email confirmation is on, there's no session yet.
         const { data } = await supabase.auth.getSession();
-        if (data.session) router.push("/onboarding");
+        // Full-page navigation so middleware reads the freshly-set session cookie.
+        if (data.session) window.location.assign("/onboarding");
         else setInfo("Check your email to confirm your account, then sign in.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) return setError(error.message);
-        router.push(next);
+        window.location.assign(next);
       }
     } catch {
       setError("Authentication isn't configured yet.");

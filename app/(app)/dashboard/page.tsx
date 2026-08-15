@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MetricCard } from "@/components/MetricCard";
 import { DeltaBar } from "@/components/DeltaBar";
 import { TdeeBadge } from "@/components/TdeeBadge";
+import { MacroBar } from "@/components/MacroBar";
 import type { DeltaResult, Goal } from "@/lib/delta";
 
 const GOALS: { key: Goal; label: string }[] = [
@@ -25,6 +26,8 @@ interface DashboardData {
   goalDelta: number;
   cutDelta: number;
   bulkDelta: number;
+  hasWearable: boolean;
+  macroTargets: { protein: number; carbs: number; fat: number } | null;
   delta: DeltaResult;
 }
 
@@ -291,13 +294,23 @@ export default function DashboardPage() {
 
       <DeltaBar delta={data.delta} goal={data.goal} />
 
+      {data.macroTargets && (
+        <section className="macro-trackers" aria-label="Macro progress">
+          <MacroBar label="Protein" consumed={data.macros.protein} target={data.macroTargets.protein} tone="protein" />
+          <MacroBar label="Carbs" consumed={data.macros.carbs} target={data.macroTargets.carbs} tone="carbs" />
+          <MacroBar label="Fat" consumed={data.macros.fat} target={data.macroTargets.fat} tone="fat" />
+        </section>
+      )}
+
       <section className="metric-grid">
-        <MetricCard
-          label="Burned Today"
-          value={data.burnedToday}
-          tone="burn"
-          sub={data.steps !== null ? `${data.steps.toLocaleString()} steps` : "no sync yet"}
-        />
+        {data.hasWearable && (
+          <MetricCard
+            label="Burned Today"
+            value={data.burnedToday}
+            tone="burn"
+            sub={data.steps !== null ? `${data.steps.toLocaleString()} steps` : "no sync yet"}
+          />
+        )}
         <MetricCard
           label="Eaten Today"
           value={data.eatenToday}

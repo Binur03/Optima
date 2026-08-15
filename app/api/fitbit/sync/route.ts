@@ -21,8 +21,15 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { timezone: true },
+    select: { timezone: true, hasWearable: true },
   });
+
+  // Manual users have no wearable to pull from — skip the Google Health calls
+  // entirely and just return their (manual) target.
+  if (!user.hasWearable) {
+    const target = await computeTarget(userId);
+    return NextResponse.json({ skipped: true, target });
+  }
 
   const today = localDateOnly(user.timezone);
   const start = addDays(today, -(BACKFILL_DAYS - 1));

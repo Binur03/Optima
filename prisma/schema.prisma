@@ -39,7 +39,19 @@ model User {
   weightKg   Decimal?  @map("weight_kg") @db.Decimal(5, 2)
   sex        Sex?
   birthDate  DateTime? @map("birth_date") @db.Date
+  age        Int?
   createdAt  DateTime  @default(now()) @map("created_at")
+
+  // Universal tracking: wearable users get a rolling TDEE; manual users get a
+  // Mifflin-St Jeor estimate stored as manualTdee.
+  hasWearable   Boolean @default(false) @map("has_wearable")
+  manualTdee    Int?    @map("manual_tdee")
+  activityLevel String? @map("activity_level") // sedentary|light|moderate|active|very_active
+
+  // Macro goals (grams). Null → derived from the calorie target on the fly.
+  targetProtein Int? @map("target_protein")
+  targetCarbs   Int? @map("target_carbs")
+  targetFat     Int? @map("target_fat")
 
   fitbitToken FitbitToken?
   dailyLogs   DailyLog[]

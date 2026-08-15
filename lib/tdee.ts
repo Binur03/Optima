@@ -54,16 +54,19 @@ export async function computeTarget(
   userId: string,
   endDate: Date = new Date()
 ): Promise<TargetResult> {
-  const [user, tdeeResult] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { goal: true, goalDelta: true },
-    }),
-    computeRollingTdee(userId, endDate),
-  ]);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { goal: true, goalDelta: true, hasWearable: true, manualTdee: true },
+  });
 
-  const targetIntake =
-    tdeeResult.tdee === null ? null : tdeeResult.tdee + user.goalDelta;
+  // Manual users: maintenance is the stored Mifflin-St Jeor estimate. Wearable
+  // users: the 7-day rolling average of actual burn.
+  const tdeeResult: TdeeResult =
+    !user.hasWearable && user.manualTdee != null
+      ? { tdee: user.manualTdee, daysUsed: 0, estimating: false }
+      : await computeRollingTdee(userId, endDate);
+
+  const targetIntake = tdeeResult.tdee === null ? null : tdeeResult.tdee + user.goalDelta;
 
   return { ...tdeeResult, goal: user.goal, goalDelta: user.goalDelta, targetIntake };
 }

@@ -200,6 +200,28 @@ input { font: inherit; }
 .ob-ok, .ob-hint { color: var(--muted); font-size: 0.85rem; }
 .fitbit-btn { background: #00b0b9; }
 
+/* wearable choice + manual metrics */
+.wearable-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice-card { min-height: 64px; padding: 14px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-weight: 600; }
+.choice-card.choice-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.manual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.manual-grid label, .ob-step > label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.manual-grid input, .ob-step select, .ob-step input[type="number"] { padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
+.tdee-result { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface-2); border-radius: 10px; }
+
+/* macro trackers */
+.macro-trackers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.macro-bar { display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
+.macro-bar-head { display: flex; flex-direction: column; gap: 1px; }
+.macro-bar-label { font-size: 0.72rem; color: var(--muted); }
+.macro-bar-nums { font-size: 0.85rem; font-weight: 700; }
+.macro-bar-track { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.macro-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.macro-protein { background: var(--eat); }
+.macro-carbs { background: var(--accent); }
+.macro-fat { background: var(--warn); }
+.macro-bar-remaining { font-size: 0.66rem; color: var(--muted); }
+
 /* ---------- Log + form ---------- */
 .log-page { display: flex; flex-direction: column; gap: 16px; }
 .camera-capture { display: flex; flex-direction: column; gap: 8px; }

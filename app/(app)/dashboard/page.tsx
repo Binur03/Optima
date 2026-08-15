@@ -205,6 +205,7 @@ export default function DashboardPage() {
           value={data.tdee.value}
           daysUsed={data.tdee.daysUsed}
           estimating={data.tdee.estimating}
+          manual={!data.hasWearable}
         />
         <div className="goal-toggle" role="group" aria-label="Goal">
           {GOALS.map((g) => (

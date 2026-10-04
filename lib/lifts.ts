@@ -63,3 +63,25 @@ export const SPLIT_PRESETS: SplitPreset[] = [
   { name: "Shoulders", exercises: ["Overhead Press", "Lateral Raise", "Rear Delt Fly", "Face Pull"] },
   { name: "Arms", exercises: ["Bicep Curl", "Hammer Curl", "Tricep Pushdown", "Skull Crusher"] },
 ];
+
+export const MAX_PROGRAM_NAME = 40;
+
+export interface ProgramTemplate {
+  key: string;
+  name: string;
+  blurb: string;
+  days: string[]; // names from SPLIT_PRESETS
+}
+
+// Whole programs, each a set of preset days.
+export const PROGRAM_TEMPLATES: ProgramTemplate[] = [
+  { key: "ppl", name: "Push / Pull / Legs", blurb: "3 days · classic", days: ["Push", "Pull", "Legs"] },
+  { key: "upper_lower", name: "Upper / Lower", blurb: "2 days · 4×/week", days: ["Upper", "Lower"] },
+  { key: "arnold", name: "Arnold Split", blurb: "3 days · high volume", days: ["Chest & Back", "Shoulders & Arms", "Legs"] },
+  { key: "bro", name: "Bro Split", blurb: "5 days · one muscle a day", days: ["Chest", "Back", "Shoulders", "Arms", "Legs"] },
+  { key: "full_body", name: "Full Body", blurb: "1 day · 2–3×/week", days: ["Full Body"] },
+];
+
+export function presetDay(name: string): SplitPreset | undefined {
+  return SPLIT_PRESETS.find((p) => p.name === name);
+}

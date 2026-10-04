@@ -72,6 +72,7 @@ model User {
   foodLogs    FoodLog[]
 
   // Training + progress (relation fields only — no columns on users)
+  workoutPrograms WorkoutProgram[]
   workoutSplits  WorkoutSplit[]
   exercises      Exercise[]
   workoutLogs    WorkoutLog[]
@@ -114,17 +115,38 @@ model XpEvent {
 
 // ---------- Lift tracker ----------
 
+// A training program (e.g. "Push / Pull / Legs", "Arnold Split") — an ordered
+// set of training days. Exactly one is active per user: the one Train shows.
+model WorkoutProgram {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean        @default(false) @map("is_active")
+  sortOrder Int            @default(0) @map("sort_order")
+  createdAt DateTime       @default(now()) @map("created_at")
+  splits    WorkoutSplit[]
+
+  @@unique([userId, name])
+  @@map("workout_programs")
+}
+
+// One training day within a program ("Push", "Chest & Back", …).
 model WorkoutSplit {
-  id        String     @id @default(uuid())
-  userId    String     @map("user_id")
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programId String?         @map("program_id")
+  program   WorkoutProgram? @relation(fields: [programId], references: [id], onDelete: Cascade)
   name      String // "Push", "Pull", "Legs", …
   sortOrder Int             @default(0) @map("sort_order")
   createdAt DateTime        @default(now()) @map("created_at")
   exercises Exercise[] // legacy single-split link; membership lives in `items`
   items     SplitExercise[]
 
-  @@unique([userId, name])
+  // Day names are unique within a program, so PPL and Arnold can both have "Legs".
+  @@unique([programId, name])
+  @@index([userId])
   @@map("workout_splits")
 }
 

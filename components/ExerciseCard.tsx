@@ -15,6 +15,7 @@ export interface ExerciseView {
 
 export interface SplitsData {
   today: string;
+  program: { id: string; name: string; isActive: boolean } | null;
   splits: { id: string; name: string; exercises: ExerciseView[] }[];
 }
 

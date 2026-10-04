@@ -5,14 +5,14 @@ import { SPLIT_PRESETS, type SplitPreset } from "@/lib/lifts";
 
 interface Props {
   open: boolean;
-  existing: string[]; // current split names, to flag duplicates
+  existing: string[]; // this program's day names, to flag duplicates
   busy: boolean;
   error: string | null;
   onClose: () => void;
   onCreate: (split: { name: string; exercises: string[] }) => void;
 }
 
-// Bottom sheet for adding a split: name it yourself or start from a preset,
+// Bottom sheet for adding a training day: name it yourself or start from a preset,
 // then trim the preset's exercises before creating it.
 export function SplitSheet({ open, existing, busy, error, onClose, onCreate }: Props) {
   const [name, setName] = useState("");
@@ -38,7 +38,7 @@ export function SplitSheet({ open, existing, busy, error, onClose, onCreate }: P
   };
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="New split">
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="New day">
       <button
         type="button"
         aria-label="Close"
@@ -47,7 +47,7 @@ export function SplitSheet({ open, existing, busy, error, onClose, onCreate }: P
       />
       <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] max-w-[480px] animate-sheet-up overflow-y-auto rounded-t-3xl border-t border-white/10 bg-neutral-900 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl">
         <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" aria-hidden />
-        <h2 className="m-0 text-lg font-semibold text-white">New split</h2>
+        <h2 className="m-0 text-lg font-semibold text-white">New training day</h2>
 
         <form
           onSubmit={(e) => {
@@ -66,7 +66,7 @@ export function SplitSheet({ open, existing, busy, error, onClose, onCreate }: P
               className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-sky-400/50 focus:outline-none"
             />
           </label>
-          {duplicate && <p className="m-0 mt-1.5 text-xs text-amber-300">You already have a split with this name.</p>}
+          {duplicate && <p className="m-0 mt-1.5 text-xs text-amber-300">This program already has a day with this name.</p>}
 
           <p className="m-0 mb-2 mt-5 text-xs font-medium text-neutral-500">Or start from</p>
           <div className="flex flex-wrap gap-2">
@@ -118,7 +118,7 @@ export function SplitSheet({ open, existing, busy, error, onClose, onCreate }: P
             disabled={busy || trimmed.length < 2 || duplicate}
             className="mt-5 w-full rounded-xl bg-sky-400 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-sky-300 disabled:bg-white/10 disabled:text-neutral-500"
           >
-            {busy ? "Creating…" : exercises.length > 0 ? `Create with ${exercises.length} exercises` : "Create empty split"}
+            {busy ? "Creating…" : exercises.length > 0 ? `Create with ${exercises.length} exercises` : "Create empty day"}
           </button>
         </form>
       </div>

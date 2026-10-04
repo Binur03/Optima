@@ -58,6 +58,7 @@ alter table public.weight_logs    enable row level security;
 alter table public.achievements   enable row level security;
 alter table public.xp_events      enable row level security;
 alter table public.split_exercises enable row level security;
+alter table public.workout_programs enable row level security;
 
 -- 4) One-time backfill: carry each exercise's legacy split into split_exercises.
 insert into public.split_exercises (id, split_id, exercise_id, sort_order)
@@ -65,3 +66,25 @@ select gen_random_uuid()::text, e.split_id, e.id, e.sort_order
 from public.exercises e
 where e.split_id is not null
 on conflict (split_id, exercise_id) do nothing;
+
+-- 5) One-time backfill: put each user's program-less splits into a program
+--    (named after PPL when that's exactly what they have) and make it active.
+insert into public.workout_programs (id, user_id, name, is_active, sort_order)
+select gen_random_uuid()::text, s.user_id,
+       case when array_agg(s.name order by s.name) = array['Legs', 'Pull', 'Push']
+            then 'Push / Pull / Legs' else 'My Program' end,
+       not exists (select 1 from public.workout_programs p where p.user_id = s.user_id and p.is_active),
+       0
+from public.workout_splits s
+where s.program_id is null
+group by s.user_id
+on conflict (user_id, name) do nothing;
+
+update public.workout_splits s
+set program_id = (
+  select p.id from public.workout_programs p
+  where p.user_id = s.user_id
+  order by p.is_active desc, p.created_at
+  limit 1
+)
+where s.program_id is null;

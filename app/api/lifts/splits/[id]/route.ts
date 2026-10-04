@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
 import { MAX_SPLIT_NAME, cleanName } from "@/lib/lifts";
-import { ownedSplit, reorder } from "@/lib/splits";
+import { isUniqueViolation, ownedSplit, reorder } from "@/lib/splits";
 
 type Ctx = { params: { id: string } };
 
 // PATCH /api/lifts/splits/[id]  { name? } renames · { move: -1 | 1 } reorders
+// the day within its program.
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const userId = await getCurrentUserId(req);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!(await ownedSplit(userId, params.id))) {
-    return NextResponse.json({ error: "split_not_found" }, { status: 404 });
-  }
+  const split = await ownedSplit(userId, params.id);
+  if (!split) return NextResponse.json({ error: "split_not_found" }, { status: 404 });
 
   let body: { name?: unknown; move?: unknown };
   try {
@@ -26,22 +25,20 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const name = cleanName(body.name, MAX_SPLIT_NAME);
     if (!name) return NextResponse.json({ error: "invalid_name" }, { status: 400 });
     try {
-      await prisma.workoutSplit.update({ where: { id: params.id }, data: { name } });
+      await prisma.workoutSplit.update({ where: { id: split.id }, data: { name } });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        return NextResponse.json({ error: "split_exists" }, { status: 409 });
-      }
+      if (isUniqueViolation(e)) return NextResponse.json({ error: "split_exists" }, { status: 409 });
       throw e;
     }
   }
 
   if (body.move === 1 || body.move === -1) {
-    const splits = await prisma.workoutSplit.findMany({
-      where: { userId },
+    const days = await prisma.workoutSplit.findMany({
+      where: { userId, programId: split.programId },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
-    const next = reorder(splits, params.id, body.move);
+    const next = reorder(days, split.id, body.move);
     if (next) {
       await prisma.$transaction(
         next.map((s, i) => prisma.workoutSplit.update({ where: { id: s.id }, data: { sortOrder: i } }))
@@ -52,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ ok: true });
 }
 
-// DELETE /api/lifts/splits/[id] — removes the split. Its exercises and every
+// DELETE /api/lifts/splits/[id] — removes the day. Its exercises and every
 // logged set stay, so re-adding a lift later brings its history back.
 export async function DELETE(req: NextRequest, { params }: Ctx) {
   const userId = await getCurrentUserId(req);

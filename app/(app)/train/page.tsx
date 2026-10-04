@@ -7,6 +7,9 @@ import { ExerciseCard, type SplitsData } from "@/components/ExerciseCard";
 import { ProgramSheet } from "@/components/ProgramSheet";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { send } from "@/lib/trainApi";
+import { UnitToggle } from "@/components/UnitToggle";
+import { useUnits } from "@/lib/useUnits";
+import { lbToDisplay, weightUnit } from "@/lib/units";
 
 async function getSplits(): Promise<SplitsData> {
   const res = await fetch("/api/lifts/splits");
@@ -37,6 +40,7 @@ export default function TrainPage() {
   const [splitId, setSplitId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { units } = useUnits();
 
   // Default day: one already trained today, else the last one picked, else the first.
   const programId = data?.program?.id;
@@ -87,10 +91,11 @@ export default function TrainPage() {
           <p className="m-0 text-xs font-medium text-neutral-500">{formatDay(data.today)}</p>
           <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Train</h1>
         </div>
-        <div className="text-right">
-          <p className="m-0 text-2xl font-bold tabular-nums text-white">{uniqueToday.length}</p>
+        <div className="flex flex-col items-end gap-1.5">
+          <UnitToggle />
           <p className="m-0 text-[11px] text-neutral-500">
-            sets today{volume > 0 ? ` · ${volume.toLocaleString()} lb` : ""}
+            <span className="text-base font-bold tabular-nums text-white">{uniqueToday.length}</span> sets today
+            {volume > 0 ? ` · ${Math.round(lbToDisplay(volume, units)).toLocaleString()} ${weightUnit(units)}` : ""}
           </p>
         </div>
       </header>

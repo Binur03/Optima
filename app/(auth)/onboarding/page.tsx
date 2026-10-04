@@ -10,6 +10,9 @@ import {
   type BiologicalSex,
 } from "@/lib/nutrition";
 import type { Goal } from "@/lib/delta";
+import { UnitToggle } from "@/components/UnitToggle";
+import { useUnits } from "@/lib/useUnits";
+import { KG_PER_LB, feetInchesToCm } from "@/lib/units";
 
 const GOALS: { key: Goal; title: string; blurb: string }[] = [
   { key: "CUT", title: "Cut", blurb: "Lose fat · TDEE − 500" },
@@ -31,6 +34,13 @@ export default function OnboardingPage() {
   const [sex, setSex] = useState<BiologicalSex>("MALE");
   const [heightCm, setHeightCm] = useState("");
   const [weightKg, setWeightKg] = useState("");
+  const [heightFt, setHeightFt] = useState("");
+  const [heightIn, setHeightIn] = useState("");
+  const [weightLb, setWeightLb] = useState("");
+  const { units } = useUnits();
+  // The maths (and the API) always use cm + kg.
+  const cm = units === "metric" ? Number(heightCm) : feetInchesToCm(Number(heightFt) || 0, Number(heightIn) || 0);
+  const kg = units === "metric" ? Number(weightKg) : Math.round(Number(weightLb) * KG_PER_LB * 10) / 10;
   const [activity, setActivity] = useState<ActivityLevel>("moderate");
   const [tdee, setTdee] = useState<number | null>(null); // calculated, then editable
 
@@ -44,8 +54,8 @@ export default function OnboardingPage() {
 
   function recalc() {
     const t = calculateTdee({
-      weightKg: Number(weightKg),
-      heightCm: Number(heightCm),
+      weightKg: kg,
+      heightCm: cm,
       age: Number(age),
       sex,
       activity,
@@ -90,6 +100,12 @@ export default function OnboardingPage() {
         <h1 className="m-0 text-2xl font-semibold tracking-tight text-white">Set up Optima</h1>
         <p className="m-0 mt-1 text-sm text-neutral-400">Pick a goal and we’ll handle the math.</p>
       </header>
+
+      <section className={CARD} aria-label="Units">
+        <p className="m-0 mb-3 text-sm font-semibold text-white">Units</p>
+        <UnitToggle full />
+        <p className="m-0 mt-2 text-xs text-neutral-500">Applies everywhere — body weight, lifts, and height. Switch any time.</p>
+      </section>
 
       <section className={CARD}>
         <StepHeading step={1} title="Your goal" />
@@ -215,14 +231,38 @@ export default function OnboardingPage() {
                 <option value="OTHER">Other</option>
               </select>
             </label>
-            <label className="block">
-              <span className={LABEL}>Height (cm)</span>
-              <input type="number" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} className={FIELD} />
-            </label>
-            <label className="block">
-              <span className={LABEL}>Weight (kg)</span>
-              <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className={FIELD} />
-            </label>
+            {units === "metric" ? (
+              <>
+                <label className="block">
+                  <span className={LABEL}>Height (cm)</span>
+                  <input type="number" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} className={FIELD} />
+                </label>
+                <label className="block">
+                  <span className={LABEL}>Weight (kg)</span>
+                  <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className={FIELD} />
+                </label>
+              </>
+            ) : (
+              <>
+                <div className="block">
+                  <span className={LABEL}>Height</span>
+                  <div className="flex gap-2">
+                    <label className="relative block flex-1">
+                      <input type="number" inputMode="numeric" min={3} max={8} value={heightFt} onChange={(e) => setHeightFt(e.target.value)} aria-label="Height, feet" className={`${FIELD} pr-7`} />
+                      <span className="pointer-events-none absolute right-3 top-1/2 mt-[3px] -translate-y-1/2 text-xs text-neutral-500">ft</span>
+                    </label>
+                    <label className="relative block flex-1">
+                      <input type="number" inputMode="numeric" min={0} max={11} value={heightIn} onChange={(e) => setHeightIn(e.target.value)} aria-label="Height, inches" className={`${FIELD} pr-7`} />
+                      <span className="pointer-events-none absolute right-3 top-1/2 mt-[3px] -translate-y-1/2 text-xs text-neutral-500">in</span>
+                    </label>
+                  </div>
+                </div>
+                <label className="block">
+                  <span className={LABEL}>Weight (lb)</span>
+                  <input type="number" inputMode="decimal" value={weightLb} onChange={(e) => setWeightLb(e.target.value)} className={FIELD} />
+                </label>
+              </>
+            )}
           </div>
           <label className="mt-3 block">
             <span className={LABEL}>Activity level</span>
@@ -280,8 +320,8 @@ export default function OnboardingPage() {
                   hasWearable: false,
                   age: Number(age),
                   sex,
-                  heightCm: Number(heightCm),
-                  weightKg: Number(weightKg),
+                  heightCm: cm,
+                  weightKg: kg,
                   activityLevel: activity,
                   manualTdee: tdee,
                 },

@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import type { ProgressState } from "@/lib/gamification";
+import { useUnits } from "@/lib/useUnits";
+import { formatWeight } from "@/lib/units";
 
 interface Props {
   open: boolean;
@@ -10,6 +12,7 @@ interface Props {
 }
 
 export function AchievementsSheet({ open, onClose, data }: Props) {
+  const { units } = useUnits();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -79,7 +82,10 @@ export function AchievementsSheet({ open, onClose, data }: Props) {
                   <span className={got ? "" : "opacity-40"}>{a.icon}</span>
                 </span>
                 <p className={`m-0 mt-2.5 text-sm font-semibold ${got ? "text-white" : "text-neutral-400"}`}>{a.title}</p>
-                <p className="m-0 mt-0.5 text-xs leading-snug text-neutral-500">{a.description}</p>
+                <p className="m-0 mt-0.5 text-xs leading-snug text-neutral-500">
+                  {/* e.g. "Bench press 225 lb" → "Bench press 102 kg" */}
+                  {a.description.replace(/(\d+(?:\.\d+)?) lb\b/g, (_, n) => formatWeight(Number(n), units, "lift"))}
+                </p>
                 <p className={`m-0 mt-2 text-[11px] font-bold tabular-nums ${got ? "text-amber-300" : "text-neutral-600"}`}>
                   {got
                     ? `Unlocked ${new Date(a.unlockedAt!).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`

@@ -8,6 +8,8 @@ import { formatDay } from "@/components/charts/GlassTooltip";
 import { CompareMode, PhotoCaption, type ProgressPhotoView as Photo } from "@/components/CompareMode";
 import { MonthCalendar, localKey } from "@/components/MonthCalendar";
 import { ShieldedPhoto } from "@/components/ShieldedPhoto";
+import { useUnits } from "@/lib/useUnits";
+import { displayToLb, weightUnit } from "@/lib/units";
 
 const BUCKET = "progress-photos";
 const SHIELD_KEY = "optima:privacy-shield";
@@ -305,6 +307,7 @@ function UploadCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preview = photo?.dataUrl ?? null;
+  const { units } = useUnits(); // the weight field is typed in the user's unit, stored in lb
 
   async function choose(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -343,7 +346,7 @@ function UploadCard({
       const res = await fetch("/api/progress/photos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, takenOn, weightLb: weight ? Number(weight) : null }),
+        body: JSON.stringify({ path, takenOn, weightLb: weight ? displayToLb(Number(weight), units) : null }),
       });
       if (!res.ok) {
         await supabase.storage.from(BUCKET).remove([path]); // don't leave an orphaned file
@@ -396,12 +399,12 @@ function UploadCard({
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium text-neutral-400">Weight (lb, optional)</span>
+          <span className="text-xs font-medium text-neutral-400">Weight ({weightUnit(units)}, optional)</span>
           <input
             inputMode="decimal"
             value={weight}
             onChange={(e) => setWeight(e.target.value.replace(/[^\d.]/g, ""))}
-            placeholder="e.g. 172.4"
+            placeholder={units === "metric" ? "e.g. 78.2" : "e.g. 172.4"}
             className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm tabular-nums text-white placeholder:text-neutral-600 focus:border-rose-400/50 focus:outline-none"
           />
         </label>

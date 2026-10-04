@@ -5,6 +5,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendAreaChart } from "@/components/charts/TrendAreaChart";
 import { formatDay } from "@/components/charts/GlassTooltip";
+import { UnitToggle } from "@/components/UnitToggle";
+import { useUnits } from "@/lib/useUnits";
+import { displayToLb, lbToDisplay, weightUnit } from "@/lib/units";
 
 interface WeightData {
   today: string;
@@ -25,6 +28,9 @@ export default function InsightsPage() {
   const [exerciseId, setExerciseId] = useState<string | null>(null);
   const [metric, setMetric] = useState<"e1rm" | "volume">("e1rm");
   const [weighIn, setWeighIn] = useState("");
+  // Everything arrives in lb; shown and entered in the user's unit.
+  const { units } = useUnits();
+  const wu = weightUnit(units);
 
   const weight = useQuery({
     queryKey: ["weight-trend"],
@@ -65,12 +71,20 @@ export default function InsightsPage() {
         .toISOString()
         .slice(0, 10)
     : "";
-  const series = (weight.data?.points ?? []).filter((p) => p.date >= cutoff);
+  const series = (weight.data?.points ?? [])
+    .filter((p) => p.date >= cutoff)
+    .map((p) => ({ ...p, weight: lbToDisplay(p.weight, units) }));
   const latest = series[series.length - 1];
   const change = series.length > 1 ? latest.weight - series[0].weight : null;
 
   // Lift series.
-  const liftPoints = lifts.data?.points ?? [];
+  const liftPoints = (lifts.data?.points ?? []).map((p) => ({
+    ...p,
+    e1rm: Math.round(lbToDisplay(p.e1rm, units, "lift")),
+    volume: Math.round(lbToDisplay(p.volume, units)),
+    // "185 × 8" → the same set in the user's unit
+    top: p.top.replace(/^([\d.]+)/, (w) => String(lbToDisplay(Number(w), units, "lift"))),
+  }));
   const liftLatest = liftPoints[liftPoints.length - 1];
   const liftChange = liftPoints.length > 1 ? liftLatest[metric] - liftPoints[0][metric] : null;
   const selectedName = lifts.data?.exercises.find((e) => e.id === lifts.data?.selectedId)?.name;
@@ -78,7 +92,10 @@ export default function InsightsPage() {
   return (
     <main className="flex flex-col gap-5 pb-4">
       <header>
-        <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Insights</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Insights</h1>
+          <UnitToggle />
+        </div>
         <p className="m-0 mt-1 text-sm text-neutral-400">Trends beat single days.</p>
       </header>
 
@@ -89,13 +106,13 @@ export default function InsightsPage() {
             <p className="m-0 text-xs font-medium text-sky-300">Body weight</p>
             <p className="m-0 mt-1 text-4xl font-bold tabular-nums tracking-tight text-white">
               {latest ? latest.weight.toFixed(1) : "—"}
-              <span className="ml-1.5 text-base font-medium text-neutral-500">lb</span>
+              <span className="ml-1.5 text-base font-medium text-neutral-500">{wu}</span>
             </p>
             {change !== null && (
               <p className="m-0 mt-1 text-xs text-neutral-400">
                 <span className="font-semibold tabular-nums text-white">
                   {change > 0 ? "+" : ""}
-                  {change.toFixed(1)} lb
+                  {change.toFixed(1)} {wu}
                 </span>{" "}
                 since {formatDay(series[0].date)}
               </p>
@@ -120,7 +137,7 @@ export default function InsightsPage() {
 
         <div className="mt-5">
           {series.length > 1 ? (
-            <TrendAreaChart data={series} dataKey="weight" color="#38bdf8" unit="lb" />
+            <TrendAreaChart data={series} dataKey="weight" color="#38bdf8" unit={wu} />
           ) : (
             <p className="m-0 grid h-[200px] place-items-center text-center text-sm text-neutral-500">
               {series.length === 1 ? "One more weigh-in and your trend line appears." : "Log a weigh-in to start your trend."}
@@ -132,7 +149,7 @@ export default function InsightsPage() {
           onSubmit={(e) => {
             e.preventDefault();
             const v = Number(weighIn);
-            if (v > 0) logWeight.mutate(v);
+            if (v > 0) logWeight.mutate(displayToLb(v, units));
           }}
           className="mt-5 flex items-center gap-2 rounded-2xl bg-white/[0.03] p-1.5 pl-4 ring-1 ring-inset ring-white/5"
         >
@@ -140,8 +157,8 @@ export default function InsightsPage() {
             inputMode="decimal"
             value={weighIn}
             onChange={(e) => setWeighIn(e.target.value.replace(/[^\d.]/g, ""))}
-            placeholder="Today’s weight (lb)"
-            aria-label="Today's weight in pounds"
+            placeholder={`Today’s weight (${wu})`}
+            aria-label={units === "metric" ? "Today's weight in kilograms" : "Today's weight in pounds"}
             className="min-w-0 flex-1 bg-transparent py-2 text-sm tabular-nums text-white placeholder:text-neutral-500 focus:outline-none"
           />
           <button
@@ -154,7 +171,7 @@ export default function InsightsPage() {
         </form>
         {logWeight.isError && (
           <p role="alert" className="m-0 mt-2 text-xs text-rose-400">
-            Enter a weight between 50 and 800 lb.
+            {units === "metric" ? "Enter a weight between 23 and 363 kg." : "Enter a weight between 50 and 800 lb."}
           </p>
         )}
       </section>
@@ -167,14 +184,14 @@ export default function InsightsPage() {
             <p className="m-0 mt-1 text-4xl font-bold tabular-nums tracking-tight text-white">
               {liftLatest ? liftLatest[metric].toLocaleString() : "—"}
               <span className="ml-1.5 text-base font-medium text-neutral-500">
-                {metric === "e1rm" ? "lb est. 1RM" : "lb volume"}
+                {metric === "e1rm" ? `${wu} est. 1RM` : `${wu} volume`}
               </span>
             </p>
             {liftChange !== null && (
               <p className="m-0 mt-1 text-xs text-neutral-400">
                 <span className="font-semibold tabular-nums text-white">
                   {liftChange > 0 ? "+" : ""}
-                  {liftChange.toLocaleString()} lb
+                  {liftChange.toLocaleString()} {wu}
                 </span>{" "}
                 over 3 months
               </p>
@@ -227,7 +244,7 @@ export default function InsightsPage() {
               data={liftPoints}
               dataKey={metric}
               color={metric === "e1rm" ? "#a3e635" : "#fb7185"}
-              unit="lb"
+              unit={wu}
               detailKey="top"
             />
           ) : (

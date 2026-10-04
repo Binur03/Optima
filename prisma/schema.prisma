@@ -48,6 +48,10 @@ model User {
   manualTdee    Int?    @map("manual_tdee")
   activityLevel String? @map("activity_level") // sedentary|light|moderate|active|very_active
 
+  // Display units only — stored values stay lb (lifts, body weight) and cm/kg
+  // (profile). "imperial" = ft/in + lb, "metric" = cm + kg.
+  unitSystem String @default("imperial") @map("unit_system")
+
   // User-chosen daily calorie target. Null → maintenance + goal offset.
   customCalories Int? @map("custom_calories")
 

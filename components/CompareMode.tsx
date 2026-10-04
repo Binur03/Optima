@@ -1,6 +1,8 @@
 "use client";
 
 import { formatDay } from "./charts/GlassTooltip";
+import { useUnits } from "@/lib/useUnits";
+import { lbToDisplay, weightUnit } from "@/lib/units";
 
 export interface ProgressPhotoView {
   id: string;
@@ -22,9 +24,11 @@ export function CompareMode({
   photos: ProgressPhotoView[]; // exactly two
   urls: Record<string, string>; // storage path → signed URL
 }) {
+  const { units } = useUnits();
   const [before, after] = [...photos].sort((a, b) => a.takenOn.localeCompare(b.takenOn));
   const days = daysBetween(before.takenOn, after.takenOn);
-  const diff = before.weightLb !== null && after.weightLb !== null ? after.weightLb - before.weightLb : null;
+  const diff =
+    before.weightLb !== null && after.weightLb !== null ? lbToDisplay(after.weightLb - before.weightLb, units) : null;
 
   return (
     <>
@@ -50,7 +54,7 @@ export function CompareMode({
           <p className="m-0 text-xl font-bold tabular-nums text-white">
             {diff === null ? "—" : `${diff > 0 ? "+" : ""}${diff.toFixed(1)}`}
           </p>
-          <p className="m-0 text-[11px] text-neutral-500">lb change</p>
+          <p className="m-0 text-[11px] text-neutral-500">{weightUnit(units)} change</p>
         </div>
       </div>
     </>
@@ -60,11 +64,14 @@ export function CompareMode({
 // Date + weight over a dark gradient so it reads on any photo. `hideWeight`
 // keeps the number private while the photo itself is shielded.
 export function PhotoCaption({ photo, hideWeight = false }: { photo: ProgressPhotoView; hideWeight?: boolean }) {
+  const { units } = useUnits();
   return (
     <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-left">
       <span className="block text-xs font-semibold text-white">{formatDay(photo.takenOn)}</span>
       {photo.weightLb !== null && !hideWeight && (
-        <span className="block text-[11px] tabular-nums text-white/70">{photo.weightLb.toFixed(1)} lb</span>
+        <span className="block text-[11px] tabular-nums text-white/70">
+          {lbToDisplay(photo.weightLb, units).toFixed(1)} {weightUnit(units)}
+        </span>
       )}
     </figcaption>
   );

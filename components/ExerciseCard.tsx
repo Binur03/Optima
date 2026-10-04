@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { LiftSet } from "@/lib/lifts";
 import { PROGRESS_KEY } from "@/lib/useProgress";
 import { formatDay } from "./charts/GlassTooltip";
 import { StepperField } from "./StepperField";
 import { SwipeToCopy } from "./SwipeToCopy";
+import { useUnits } from "@/lib/useUnits";
+import { displayToLb, lbToDisplay, liftStep, weightUnit } from "@/lib/units";
 
 export interface ExerciseView {
   id: string;
@@ -44,6 +46,10 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
   const [open, setOpen] = useState(defaultOpen);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({}); // keyed by absolute set index
   const [extra, setExtra] = useState(0);
+  // Sets are stored in lb; drafts are typed in the user's unit.
+  const { units } = useUnits();
+  const show = (lb: number) => lbToDisplay(lb, units, "lift");
+  useEffect(() => setDrafts({}), [units]); // a half-typed number would change meaning
 
   const done = exercise.today;
   const ghost = exercise.last?.sets ?? [];
@@ -81,7 +87,7 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
   function resolve(i: number): LiftSet | null {
     const d = drafts[i];
     const g = ghostFor(i);
-    const weight = d?.weight ? Number(d.weight) : g?.weight;
+    const weight = d?.weight ? displayToLb(Number(d.weight), units) : g?.weight;
     const reps = d?.reps ? Number(d.reps) : g?.reps;
     if (weight === undefined || reps === undefined) return null;
     if (!Number.isFinite(weight) || weight < 0 || !Number.isInteger(reps) || reps < 1) return null;
@@ -103,7 +109,7 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
   const subtitle = done.length
     ? `${done.length} set${done.length === 1 ? "" : "s"} today`
     : exercise.last && best
-      ? `Last: ${best.weight} × ${best.reps} · ${formatDay(exercise.last.date)}`
+      ? `Last: ${show(best.weight)} ${weightUnit(units)} × ${best.reps} · ${formatDay(exercise.last.date)}`
       : "No history yet";
 
   return (
@@ -136,7 +142,7 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
         <div className="border-t border-white/5 px-4 pb-4 pt-3">
           <div className="mb-2 grid grid-cols-[2rem_1fr_1fr_2.75rem] gap-2 px-1 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
             <span>Set</span>
-            <span className="text-center">lb</span>
+            <span className="text-center">{weightUnit(units)}</span>
             <span className="text-center">Reps</span>
             <span />
           </div>
@@ -147,13 +153,13 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
                 key={`done-${i}`}
                 onCopy={() => addSet.mutate(s)}
                 label="Same again"
-                a11yLabel={`Log another ${s.weight} × ${s.reps}`}
+                a11yLabel={`Log another ${show(s.weight)} ${weightUnit(units)} × ${s.reps}`}
                 disabled={addSet.isPending}
                 className="rounded-2xl bg-[#16221e]"
               >
                 <div className="grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-2 px-1 py-1">
                   <span className="text-center text-sm font-semibold text-emerald-400">{i + 1}</span>
-                  <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.weight}</span>
+                  <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{show(s.weight)}</span>
                   <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.reps}</span>
                   <button
                     type="button"
@@ -191,9 +197,9 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
                     label={`Set ${i + 1} weight`}
                     inputMode="decimal"
                     value={d.weight}
-                    placeholder={g ? String(g.weight) : undefined}
+                    placeholder={g ? String(show(g.weight)) : undefined}
                     onChange={(v) => set({ weight: v })}
-                    step={(w) => (w < 50 ? 2.5 : 5)}
+                    step={liftStep(units)}
                     max={2000}
                   />
                   <StepperField

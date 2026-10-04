@@ -61,7 +61,87 @@ model User {
   dailyLogs   DailyLog[]
   foodLogs    FoodLog[]
 
+  // Training + progress (relation fields only — no columns on users)
+  workoutSplits  WorkoutSplit[]
+  exercises      Exercise[]
+  workoutLogs    WorkoutLog[]
+  progressPhotos ProgressPhoto[]
+  weightLogs     WeightLog[]
+
   @@map("users")
+}
+
+// ---------- Lift tracker ----------
+
+model WorkoutSplit {
+  id        String     @id @default(uuid())
+  userId    String     @map("user_id")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String // "Push", "Pull", "Legs", …
+  sortOrder Int        @default(0) @map("sort_order")
+  createdAt DateTime   @default(now()) @map("created_at")
+  exercises Exercise[]
+
+  @@unique([userId, name])
+  @@map("workout_splits")
+}
+
+model Exercise {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  splitId   String?       @map("split_id")
+  split     WorkoutSplit? @relation(fields: [splitId], references: [id], onDelete: SetNull)
+  name      String
+  sortOrder Int           @default(0) @map("sort_order")
+  createdAt DateTime      @default(now()) @map("created_at")
+  logs      WorkoutLog[]
+
+  @@unique([userId, name])
+  @@map("exercises")
+}
+
+// One row per exercise per day; sets append atomically.
+model WorkoutLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId String   @map("exercise_id")
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  logDate    DateTime @map("log_date") @db.Date
+  sets       Json // [{ "weight": 225, "reps": 8 }] — weight in lb
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, exerciseId, logDate])
+  @@map("workout_logs")
+}
+
+// ---------- Progress ----------
+
+model ProgressPhoto {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storagePath String   @unique @map("storage_path") // "<auth.uid()>/<uuid>.jpg" in the private bucket
+  takenOn     DateTime @map("taken_on") @db.Date
+  weightLb    Decimal? @map("weight_lb") @db.Decimal(6, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, takenOn])
+  @@map("progress_photos")
+}
+
+model WeightLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logDate   DateTime @map("log_date") @db.Date
+  weightLb  Decimal  @map("weight_lb") @db.Decimal(6, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, logDate])
+  @@map("weight_logs")
 }
 
 model FitbitToken {

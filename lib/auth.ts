@@ -30,6 +30,12 @@ async function supabaseUser(req: NextRequest) {
   return user;
 }
 
+/** The Supabase auth.uid() for this request — the owner folder in Storage. */
+export async function getAuthUserId(req: NextRequest): Promise<string | null> {
+  const user = await supabaseUser(req);
+  return user?.id ?? null;
+}
+
 /** Returns the authenticated app User.id, or null. */
 export async function getCurrentUserId(req: NextRequest): Promise<string | null> {
   const user = await supabaseUser(req);

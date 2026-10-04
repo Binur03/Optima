@@ -49,3 +49,22 @@ export function isValidTimeZone(tz: string): boolean {
     return false;
   }
 }
+
+// "YYYY-MM-DD" for a UTC-midnight day key (as stored in log_date columns).
+export function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Shifts a UTC-midnight day key by whole days.
+export function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() + n);
+  return out;
+}
+
+// Parses "YYYY-MM-DD" into a UTC-midnight day key; null if malformed.
+export function parseDay(s: unknown): Date | null {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}

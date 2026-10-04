@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { browserSupabase, supabaseConfigured } from "@/lib/supabase";
-import { fileToDownscaledJpeg } from "@/lib/image";
+import { PROGRESS_PHOTO, compressImage, type CompressedImage } from "@/lib/image";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { CompareMode, PhotoCaption, type ProgressPhotoView as Photo } from "@/components/CompareMode";
 import { MonthCalendar, localKey } from "@/components/MonthCalendar";
@@ -298,27 +298,32 @@ function UploadCard({
   onUploaded: (takenOn: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<CompressedImage | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [takenOn, setTakenOn] = useState(initialDate);
   const [weight, setWeight] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const preview = photo?.dataUrl ?? null;
 
   async function choose(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    setFile(f);
     setError(null);
+    setCompressing(true);
     try {
-      setPreview(await fileToDownscaledJpeg(f, 1600));
+      // ~150 KB WebP (JPEG on browsers that can't encode WebP) — never the raw 3–8 MB original.
+      setPhoto(await compressImage(f, PROGRESS_PHOTO));
     } catch {
+      setPhoto(null);
       setError("Couldn’t read that image.");
+    } finally {
+      setCompressing(false);
     }
   }
 
   async function upload() {
-    if (!preview) return;
+    if (!photo) return;
     setBusy(true);
     setError(null);
     const supabase = browserSupabase();
@@ -329,11 +334,10 @@ function UploadCard({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Please sign in again.");
 
-      path = `${user.id}/${crypto.randomUUID()}.jpg`;
-      const blob = await (await fetch(preview)).blob();
+      path = `${user.id}/${crypto.randomUUID()}.${photo.ext}`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        .upload(path, photo.blob, { contentType: photo.mimeType, upsert: false });
       if (upErr) throw new Error(upErr.message);
 
       const res = await fetch("/api/progress/photos", {
@@ -371,9 +375,14 @@ function UploadCard({
         {preview ? (
           <img src={preview} alt="Selected progress photo" className="block max-h-80 w-full object-cover" />
         ) : (
-          <span className="block py-12">Tap to choose a photo</span>
+          <span className="block py-12">{compressing ? "Optimizing photo…" : "Tap to choose a photo"}</span>
         )}
       </button>
+      {photo && (
+        <p className="m-0 mt-1.5 text-right text-[11px] tabular-nums text-neutral-500">
+          Optimized to {Math.round(photo.bytes / 1024)} KB {photo.ext === "webp" ? "WebP" : "JPEG"}
+        </p>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <label className="block">
@@ -407,7 +416,7 @@ function UploadCard({
       <button
         type="button"
         onClick={upload}
-        disabled={!file || !preview || busy}
+        disabled={!photo || compressing || busy}
         className="mt-4 w-full rounded-xl bg-rose-500 py-3 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:bg-white/10 disabled:text-neutral-500"
       >
         {busy ? "Uploading…" : "Save photo"}

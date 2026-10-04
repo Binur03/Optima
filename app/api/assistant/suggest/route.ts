@@ -6,6 +6,9 @@ import { macroTargetsFromCalories, remainingMacros } from "@/lib/macros";
 import { suggestMeals } from "@/lib/gemini";
 import { localDateOnly } from "@/lib/datetime";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 // GET /api/assistant/suggest — remaining macros for today + AI meal suggestions
 // that help fill the gaps.
 export async function GET(req: NextRequest) {

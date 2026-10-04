@@ -4,6 +4,9 @@ import { getCurrentUserId } from "@/lib/auth";
 import { analyzeFoodText } from "@/lib/gemini";
 import { localDateOnly } from "@/lib/datetime";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 // POST /api/food/text  { text }
 // Quick-add: estimate macros for a text meal (e.g. "Big Mac meal") via Gemini
 // AND persist it to today's food_logs in one call. Unlike the photo/search flow,
@@ -58,10 +61,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const rateLimited = err instanceof Error && /429|rate|quota|resource_exhausted/i.test(err.message);
-    return NextResponse.json(
-      { error: rateLimited ? "rate_limited" : "estimate_failed" },
-      { status: rateLimited ? 429 : 502 }
-    );
+    console.error("[food/text] failed:", err instanceof Error ? err.message : err);
+    const busy =
+      err instanceof Error && /429|503|rate|quota|resource.?exhausted|overloaded|unavailable/i.test(err.message);
+    return NextResponse.json({ error: busy ? "ai_busy" : "estimate_failed" }, { status: busy ? 503 : 502 });
   }
 }

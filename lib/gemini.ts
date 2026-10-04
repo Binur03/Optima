@@ -51,32 +51,62 @@ const TEXT_PROMPT = (query: string) =>
   `Estimate calories + macros for a typical single serving of: "${query}". ` +
   "Return numbers only. Set confidence based on how standardized the item is.";
 
+// Token budget. Flash models "think" before answering by default, and those
+// hidden tokens are billed as output: measured on a single macro estimate,
+// 533–636 thinking tokens for a ~45-token JSON answer. These tasks are simple
+// lookups, so thinking is off (~90% fewer tokens, ~3–6× faster) and each call
+// gets an output cap sized to its JSON with headroom (a truncated answer fails
+// JSON.parse and surfaces as a normal "try again" error).
+const OUTPUT_CAP = { single: 256, items: 1024, suggestions: 512, insight: 400 } as const;
+
+function config(maxOutputTokens: number, schema?: object) {
+  return {
+    ...(schema ? { responseMimeType: "application/json", responseSchema: schema } : {}),
+    maxOutputTokens,
+    // Not in this SDK's types yet; passed straight through to the API.
+    thinkingConfig: { thinkingBudget: 0 },
+  } as object;
+}
+
 function getModel(modelId: string) {
   return genAI.getGenerativeModel({
     model: modelId,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: MACRO_SCHEMA as unknown as object,
-    },
+    generationConfig: config(OUTPUT_CAP.single, MACRO_SCHEMA as unknown as object),
   });
 }
 
-// Runs a request against the primary model, retrying once on the fallback
-// if the primary model id is rejected (e.g. SDK pinned to an older API).
-async function withFallback(
-  run: (modelId: string) => Promise<string>
-): Promise<MacroEstimate> {
-  let text: string;
-  try {
-    text = await run(GEMINI_MODEL_ID);
-  } catch (err) {
-    if (isModelNotFound(err)) {
-      text = await run(GEMINI_FALLBACK_MODEL_ID);
-    } else {
-      throw err;
+// Runs a request on the primary model; if that model is missing, overloaded,
+// or rate-limited, moves to the fallback (which has its own quota), and gives
+// the fallback one short second chance if it's momentarily busy too.
+// After the primary says it's busy / over quota, skip it for a minute rather
+// than paying a failed round trip on every request (per server instance).
+let primaryCoolUntil = 0;
+
+async function runWithFallback(run: (modelId: string) => Promise<string>): Promise<string> {
+  if (Date.now() >= primaryCoolUntil) {
+    try {
+      return await run(GEMINI_MODEL_ID);
+    } catch (err) {
+      if (!isModelNotFound(err) && !isRetryable(err)) throw err;
+      if (isRetryable(err)) primaryCoolUntil = Date.now() + 60_000;
+      console.warn(`[gemini] ${GEMINI_MODEL_ID} failed, using ${GEMINI_FALLBACK_MODEL_ID}:`, errMessage(err));
     }
   }
-  return sanitize(JSON.parse(text));
+  try {
+    return await run(GEMINI_FALLBACK_MODEL_ID);
+  } catch (err) {
+    if (!isRetryable(err)) throw err;
+    await new Promise((r) => setTimeout(r, 1200));
+    return run(GEMINI_FALLBACK_MODEL_ID);
+  }
+}
+
+function errMessage(err: unknown) {
+  return (err instanceof Error ? err.message : String(err)).slice(0, 200);
+}
+
+async function withFallback(run: (modelId: string) => Promise<string>): Promise<MacroEstimate> {
+  return sanitize(JSON.parse(await runWithFallback(run)));
 }
 
 export async function analyzeMealImage(
@@ -123,6 +153,12 @@ function isModelNotFound(err: unknown): boolean {
   return /not found|404|unsupported model|invalid model/i.test(msg);
 }
 
+// Busy or rate-limited (the free tier allows only a few requests per minute).
+function isRetryable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /\b(429|500|503)\b|overloaded|unavailable|resource.?exhausted|too many requests/i.test(msg);
+}
+
 // ---------- Macro Assistant: meal suggestions ----------
 const SUGGESTION_SCHEMA = {
   type: SchemaType.OBJECT,
@@ -161,24 +197,13 @@ export async function suggestMeals(remaining: {
     "'food' is the food + portion (e.g. '1.5 cups Greek yogurt + a handful of almonds'), and " +
     "'why' is the approximate macros it adds (e.g. '~30g protein, 12g fat'). Keep it common and practical.";
 
-  const run = async (modelId: string): Promise<string> => {
+  const text = await runWithFallback(async (modelId) => {
     const model = genAI.getGenerativeModel({
       model: modelId,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: SUGGESTION_SCHEMA as unknown as object,
-      },
+      generationConfig: config(OUTPUT_CAP.suggestions, SUGGESTION_SCHEMA as unknown as object),
     });
     return (await model.generateContent(prompt)).response.text();
-  };
-
-  let text: string;
-  try {
-    text = await run(GEMINI_MODEL_ID);
-  } catch (err) {
-    if (isModelNotFound(err)) text = await run(GEMINI_FALLBACK_MODEL_ID);
-    else throw err;
-  }
+  });
 
   const parsed = JSON.parse(text) as { suggestions?: MealSuggestion[] };
   return Array.isArray(parsed.suggestions)
@@ -219,24 +244,13 @@ const NLP_PROMPT = (text: string) =>
 
 // Parses a free-text/dictated meal into one estimate per food item.
 export async function analyzeMealItems(text: string): Promise<MacroEstimate[]> {
-  const run = async (modelId: string): Promise<string> => {
+  const raw = await runWithFallback(async (modelId) => {
     const model = genAI.getGenerativeModel({
       model: modelId,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: ITEMS_SCHEMA as unknown as object,
-      },
+      generationConfig: config(OUTPUT_CAP.items, ITEMS_SCHEMA as unknown as object),
     });
     return (await model.generateContent(NLP_PROMPT(text))).response.text();
-  };
-
-  let raw: string;
-  try {
-    raw = await run(GEMINI_MODEL_ID);
-  } catch (err) {
-    if (isModelNotFound(err)) raw = await run(GEMINI_FALLBACK_MODEL_ID);
-    else throw err;
-  }
+  });
 
   const parsed = JSON.parse(raw) as { items?: MacroEstimate[] };
   const items = Array.isArray(parsed.items) ? parsed.items.map(sanitize) : [];
@@ -266,19 +280,11 @@ export async function weeklyInsight(payload: {
     `${payload.macroTargets.fat}g fat. Their last 7 days (actuals): ` +
     `${JSON.stringify(payload.days)}. In 2-3 warm, specific sentences, call out ONE ` +
     "genuine positive trend (reference real numbers, e.g. days they hit protein) and ONE " +
-    "area to improve. No preamble, no bullet points — just the encouraging note.";
+    "area to improve. Plain text only — no preamble, no markdown, no bullet points.";
 
-  const run = async (modelId: string): Promise<string> => {
-    const model = genAI.getGenerativeModel({ model: modelId });
+  const text = await runWithFallback(async (modelId) => {
+    const model = genAI.getGenerativeModel({ model: modelId, generationConfig: config(OUTPUT_CAP.insight) });
     return (await model.generateContent(prompt)).response.text();
-  };
-
-  let text: string;
-  try {
-    text = await run(GEMINI_MODEL_ID);
-  } catch (err) {
-    if (isModelNotFound(err)) text = await run(GEMINI_FALLBACK_MODEL_ID);
-    else throw err;
-  }
+  });
   return text.trim();
 }

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeFoodText } from "@/lib/gemini";
 import { getCurrentUserId } from "@/lib/auth";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 // POST /api/food/search  { query }
 // Text fallback: Gemini text-only estimate (swap for USDA FoodData Central later).
 // Also returns an EDITABLE estimate — not persisted here.

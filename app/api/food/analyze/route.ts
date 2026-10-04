@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeMealImage, analyzeFoodText } from "@/lib/gemini";
 import { getCurrentUserId } from "@/lib/auth";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 // Guard rails: cap decoded image at ~5MB, allow common photo mime types.
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"]);

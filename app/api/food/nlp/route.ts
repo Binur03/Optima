@@ -4,6 +4,9 @@ import { getCurrentUserId } from "@/lib/auth";
 import { analyzeMealItems } from "@/lib/gemini";
 import { localDateOnly } from "@/lib/datetime";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 // POST /api/food/nlp  { text }
 // Natural-language / voice quick-log: Gemini splits the description into food
 // items, and we persist ALL of them to today's log in one shot (no edit step).
@@ -65,11 +68,9 @@ export async function POST(req: NextRequest) {
       totals,
     });
   } catch (err) {
-    const rateLimited =
-      err instanceof Error && /429|rate|quota|resource_exhausted/i.test(err.message);
-    return NextResponse.json(
-      { error: rateLimited ? "rate_limited" : "nlp_failed" },
-      { status: rateLimited ? 429 : 502 }
-    );
+    console.error("[food/nlp] failed:", err instanceof Error ? err.message : err);
+    const busy =
+      err instanceof Error && /429|503|rate|quota|resource.?exhausted|overloaded|unavailable/i.test(err.message);
+    return NextResponse.json({ error: busy ? "ai_busy" : "nlp_failed" }, { status: busy ? 503 : 502 });
   }
 }

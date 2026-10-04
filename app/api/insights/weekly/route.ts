@@ -6,6 +6,9 @@ import { defaultMacroTargets } from "@/lib/nutrition";
 import { weeklyInsight, type WeeklyStat } from "@/lib/gemini";
 import { localDateOnly } from "@/lib/datetime";
 
+// AI calls (plus a fallback retry) can outlast the default function timeout.
+export const maxDuration = 30;
+
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isoDate(d: Date): string {

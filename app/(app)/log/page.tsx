@@ -4,9 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditableMacroForm } from "@/components/EditableMacroForm";
-import { fileToDownscaledJpeg } from "@/lib/image";
+import { MEAL_PHOTO, compressImage } from "@/lib/image";
 import type { MacroEstimate } from "@/lib/gemini";
-import { PROGRESS_KEY } from "@/lib/useProgress";
+import { refreshFood } from "@/lib/useMeals";
 
 type Source = "AI_IMAGE" | "MANUAL" | "TEXT_SEARCH";
 
@@ -93,16 +93,16 @@ export default function LogPage() {
         setQuickError(
           j.error === "no_items"
             ? "Couldn't find any foods in that — try rephrasing."
-            : "Couldn't log that — try again."
+            : j.error === "ai_busy"
+              ? "The AI is busy right now — give it a few seconds and tap Log again. Nothing was saved."
+              : "Couldn't log that — try again. Nothing was saved."
         );
         return;
       }
       setQuickResult({ count: j.saved, calories: Math.round(j.totals?.calories ?? 0) });
       setQuickText("");
-      // Dashboard's macro trackers + Recent Meals refetch on next view.
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["recents"] });
-      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
+      // Dashboard, meal cards, Recent Meals, and XP refetch on next view.
+      refreshFood(qc);
     } catch {
       setQuickError("Network error. Try again.");
     } finally {
@@ -113,6 +113,7 @@ export default function LogPage() {
   // ---------- Photo / single-item flow ----------
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
+  const [imageMime, setImageMime] = useState<string>("image/jpeg");
   const [contextText, setContextText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +124,10 @@ export default function LogPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      setImageDataUrl(await fileToDownscaledJpeg(file));
+      // ~100 KB at ≤768 px: one Gemini image tile, and small enough to store.
+      const img = await compressImage(file, MEAL_PHOTO);
+      setImageDataUrl(img.dataUrl);
+      setImageMime(img.mimeType);
       setError(null);
     } catch {
       setError("Couldn't read that image.");
@@ -140,7 +144,7 @@ export default function LogPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageBase64,
-          mimeType: "image/jpeg",
+          mimeType: imageMime,
           contextText: contextText.trim() || undefined,
         }),
       });

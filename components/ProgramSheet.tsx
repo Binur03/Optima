@@ -4,17 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PROGRAM_TEMPLATES } from "@/lib/lifts";
+import { PROGRAM_TEMPLATES, templatesFor, type Equipment } from "@/lib/lifts";
 import { getPrograms, send, trainError } from "@/lib/trainApi";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  equipment?: Equipment; // home setups see home templates first
 }
 
 // Bottom sheet: switch programs in one tap, jump to a program's editor, or
 // create a new program from a template.
-export function ProgramSheet({ open, onClose }: Props) {
+export function ProgramSheet({ open, onClose, equipment = "gym" }: Props) {
+  const templates = templatesFor(equipment);
   const qc = useQueryClient();
   const router = useRouter();
   const [view, setView] = useState<"list" | "new">("list");
@@ -125,7 +127,7 @@ export function ProgramSheet({ open, onClose }: Props) {
             <button
               type="button"
               onClick={() => {
-                pickTemplate(PROGRAM_TEMPLATES[0].key);
+                pickTemplate(templates[0].key);
                 setView("new");
               }}
               className="mt-4 w-full rounded-2xl border border-dashed border-white/15 py-3.5 text-sm font-semibold text-sky-300 transition hover:bg-white/[0.03]"
@@ -149,7 +151,7 @@ export function ProgramSheet({ open, onClose }: Props) {
 
             <p className="m-0 mb-2 mt-4 text-xs font-medium text-neutral-500">Start from</p>
             <div className="grid grid-cols-2 gap-2">
-              {[...PROGRAM_TEMPLATES, null].map((t) => {
+              {[...templates, null].map((t) => {
                 const key = t?.key ?? null;
                 const selected = template === key;
                 return (

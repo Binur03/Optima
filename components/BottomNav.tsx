@@ -76,7 +76,7 @@ export function BottomNav() {
           <button
             type="button"
             onClick={() => setDialOpen((o) => !o)}
-            aria-label={dialOpen ? "Close add menu" : "Add food, lift, or progress photo"}
+            aria-label={dialOpen ? "Close add menu" : "Add food, lift, cardio, or progress photo"}
             aria-haspopup="menu"
             aria-expanded={dialOpen}
             className="-mt-5 grid h-14 w-14 place-items-center rounded-full bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-500/30 ring-4 ring-zinc-950 transition hover:bg-emerald-400 active:scale-95"

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
 import { MAX_EXERCISE_NAME, cleanName } from "@/lib/lifts";
-import { addExercisesToSplit, ownedSplit, reorder } from "@/lib/splits";
+import { addExercisesToSplit, ownedSplit, reorder, replaceInSplit } from "@/lib/splits";
 
 type Ctx = { params: { id: string } };
 
@@ -31,7 +31,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ ok: true });
 }
 
-// PATCH /api/lifts/splits/[id]/exercises  { exerciseId, move: -1 | 1 }
+// PATCH /api/lifts/splits/[id]/exercises
+//   { exerciseId, move: -1 | 1 } reorders · { exerciseId, replaceWith } swaps in place
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const userId = await getCurrentUserId(req);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -40,8 +41,18 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 
   const body = await readBody(req);
-  const move = body?.move;
-  if (typeof body?.exerciseId !== "string" || (move !== 1 && move !== -1)) {
+  if (typeof body?.exerciseId !== "string") return NextResponse.json({ error: "bad_request" }, { status: 400 });
+
+  // { exerciseId, replaceWith } — swap for another lift in the same spot.
+  if (body.replaceWith !== undefined) {
+    const name = cleanName(body.replaceWith, MAX_EXERCISE_NAME);
+    if (!name) return NextResponse.json({ error: "invalid_name" }, { status: 400 });
+    const ok = await replaceInSplit(userId, params.id, body.exerciseId, name);
+    return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "exercise_not_found" }, { status: 404 });
+  }
+
+  const move = body.move;
+  if (move !== 1 && move !== -1) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 

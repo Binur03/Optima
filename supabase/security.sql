@@ -59,6 +59,7 @@ alter table public.achievements   enable row level security;
 alter table public.xp_events      enable row level security;
 alter table public.split_exercises enable row level security;
 alter table public.workout_programs enable row level security;
+alter table public.cardio_logs    enable row level security;
 
 -- 4) One-time backfill: carry each exercise's legacy split into split_exercises.
 insert into public.split_exercises (id, split_id, exercise_id, sort_order)

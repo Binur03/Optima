@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { DEFAULT_SPLITS, PROGRAM_TEMPLATES, presetDay } from "@/lib/lifts";
+import { kindFor } from "@/lib/exerciseCatalog";
 
 // The user's split, or null if it isn't theirs.
 export function ownedSplit(userId: string, splitId: string) {
@@ -32,7 +33,8 @@ export async function addExercisesToSplit(userId: string, splitId: string, names
   const missing = [...new Set(names.filter((n) => !byKey.has(n.toLowerCase())))];
   if (missing.length > 0) {
     await prisma.exercise.createMany({
-      data: missing.map((name) => ({ userId, name })),
+      // Planks become timed, push-ups bodyweight, everything else weight × reps.
+      data: missing.map((name) => ({ userId, name, kind: kindFor(name) })),
       skipDuplicates: true,
     });
     const created = await prisma.exercise.findMany({
@@ -50,6 +52,26 @@ export async function addExercisesToSplit(userId: string, splitId: string, names
     skipDuplicates: true,
   });
   return ids;
+}
+
+// Swaps one lift in a day for another (e.g. Bench Press → Push-Up), keeping its
+// position. The old lift's history is untouched; only the day's line-up changes.
+export async function replaceInSplit(userId: string, splitId: string, exerciseId: string, replacement: string) {
+  const current = await prisma.splitExercise.findUnique({
+    where: { splitId_exerciseId: { splitId, exerciseId } },
+    select: { id: true, sortOrder: true },
+  });
+  if (!current) return false;
+  const [newId] = await addExercisesToSplit(userId, splitId, [replacement]);
+  if (!newId || newId === exerciseId) return true;
+  await prisma.$transaction([
+    prisma.splitExercise.update({
+      where: { splitId_exerciseId: { splitId, exerciseId: newId } },
+      data: { sortOrder: current.sortOrder },
+    }),
+    prisma.splitExercise.delete({ where: { id: current.id } }),
+  ]);
+  return true;
 }
 
 // Adds a day to the end of a program, optionally seeded with exercises.

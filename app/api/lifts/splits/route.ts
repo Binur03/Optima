@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { timezone: true },
+    select: { timezone: true, equipment: true },
   });
   const today = localDateOnly(user.timezone);
 
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
             name: true,
             items: {
               orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-              select: { exercise: { select: { id: true, name: true } } },
+              select: { exercise: { select: { id: true, name: true, kind: true } } },
             },
           },
         })
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     today: isoDay(today),
+    equipment: user.equipment,
     program: program ? { id: program.id, name: program.name, isActive: meta?.isActive ?? false } : null,
     splits: splits.map((s) => ({
       id: s.id,
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
         return {
           id: e.id,
           name: e.name,
+          kind: e.kind,
           today: todayBy.get(e.id) ?? [],
           last: last ? { date: isoDay(last.logDate), sets: parseSets(last.sets) } : null,
         };

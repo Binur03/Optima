@@ -19,8 +19,9 @@ export async function GET(req: NextRequest) {
     where: { userId, logDate: { gte: start } },
     _count: { _all: true },
   });
+  // 1RM and volume only mean something for loaded lifts — skip holds and bodyweight.
   const names = await prisma.exercise.findMany({
-    where: { userId, id: { in: sessions.map((s) => s.exerciseId) } },
+    where: { userId, id: { in: sessions.map((s) => s.exerciseId) }, kind: "weight" },
     select: { id: true, name: true },
   });
   const nameBy = new Map(names.map((n) => [n.id, n.name]));

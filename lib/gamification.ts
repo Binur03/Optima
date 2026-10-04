@@ -4,6 +4,7 @@ import { addDays, isoDay, localDateOnly } from "@/lib/datetime";
 import { computeTarget } from "@/lib/tdee";
 import { defaultMacroTargets } from "@/lib/nutrition";
 import { parseSets } from "@/lib/lifts";
+import { WORKOUT_GOAL } from "@/lib/cardio";
 import { ACHIEVEMENTS, type AchievementStats } from "@/lib/achievements";
 import {
   CALORIE_TOLERANCE,
@@ -127,7 +128,7 @@ export async function syncProgress(userId: string) {
       ? user.targetProtein
       : null;
 
-  const [meals, lifts, streak, proteinToday, proteinYesterday, targetYesterday] =
+  const [meals, lifts, cardio, wearable, streak, proteinToday, proteinYesterday, targetYesterday] =
     await Promise.all([
       prisma.foodLog.findMany({
         where: { userId, logDate: { gte: since } },
@@ -138,6 +139,14 @@ export async function syncProgress(userId: string) {
         where: { userId, logDate: { gte: since } },
         select: { logDate: true, sets: true },
       }),
+      prisma.cardioLog.findMany({
+        where: { userId, logDate: { gte: since } },
+        select: { logDate: true, minutes: true, steps: true },
+      }),
+      prisma.dailyLog.findMany({
+        where: { userId, logDate: { gte: since }, steps: { not: null } },
+        select: { logDate: true, steps: true },
+      }),
       computeStreak(userId, user.timezone),
       proteinTarget(userId, today, storedProtein),
       proteinTarget(userId, yesterday, storedProtein),
@@ -145,10 +154,11 @@ export async function syncProgress(userId: string) {
     ]);
 
   // Per-day rollups.
-  const day = new Map<string, { meals: string[]; kcal: number; protein: number; sets: number; liftDone: boolean }>();
+  type Day = { meals: string[]; kcal: number; protein: number; sets: number; liftDone: boolean; cardioMin: number; steps: number };
+  const day = new Map<string, Day>();
   const roll = (key: string) => {
     let d = day.get(key);
-    if (!d) day.set(key, (d = { meals: [], kcal: 0, protein: 0, sets: 0, liftDone: false }));
+    if (!d) day.set(key, (d = { meals: [], kcal: 0, protein: 0, sets: 0, liftDone: false, cardioMin: 0, steps: 0 }));
     return d;
   };
   for (const m of meals) {
@@ -163,14 +173,28 @@ export async function syncProgress(userId: string) {
     d.sets += n;
     if (n >= LIFT_COMPLETE_SETS) d.liftDone = true;
   }
+  for (const c of cardio) {
+    const d = roll(isoDay(c.logDate));
+    d.cardioMin += c.minutes;
+    d.steps += c.steps ?? 0;
+  }
+  // A wearable's step count wins when it's higher than what was logged by hand.
+  for (const w of wearable) {
+    const d = roll(isoDay(w.logDate));
+    d.steps = Math.max(d.steps, w.steps ?? 0);
+  }
+  // A workout counts whether it's lifting, cardio, or simply moving a lot.
+  const workoutDone = (d: Day) => d.liftDone || d.cardioMin >= WORKOUT_GOAL.cardioMinutes;
+  const ringClosed = (d: Day) =>
+    d.sets >= WORKOUT_GOAL_SETS || d.cardioMin >= WORKOUT_GOAL.cardioMinutes || d.steps >= WORKOUT_GOAL.steps;
 
   const candidates: Candidate[] = [];
   for (const [date, d] of day) {
     for (const id of d.meals.slice(0, XP.mealsPerDay)) {
       candidates.push({ key: `meal:${id}`, amount: XP.meal, label: "Meal logged" });
     }
-    if (d.liftDone) candidates.push({ key: `lift:${date}`, amount: XP.lift, label: "Lift complete" });
-    if (d.sets >= WORKOUT_GOAL_SETS) {
+    if (workoutDone(d)) candidates.push({ key: `lift:${date}`, amount: XP.lift, label: "Workout complete" });
+    if (ringClosed(d)) {
       candidates.push({ key: `workout:${date}`, amount: XP.workout, label: "Workout ring closed" });
     }
   }
@@ -181,7 +205,7 @@ export async function syncProgress(userId: string) {
     return {
       breakfast: (d?.meals.length ?? 0) > 0,
       protein: target != null && target > 0 && (d?.protein ?? 0) >= target,
-      lift: d?.liftDone ?? false,
+      lift: d ? workoutDone(d) : false,
     };
   };
   const qToday = questsFor(todayKey, proteinToday);
@@ -249,7 +273,7 @@ export async function syncProgress(userId: string) {
     data: { totalXP, level, currentStreak: streak, highestStreak },
   });
 
-  const todaySets = day.get(todayKey)?.sets ?? 0;
+  const todayRoll = day.get(todayKey);
   const quests: Quest[] = [
     {
       key: "breakfast",
@@ -272,8 +296,8 @@ export async function syncProgress(userId: string) {
     },
     {
       key: "lift",
-      title: "Complete a Lift",
-      sub: `${LIFT_COMPLETE_SETS} sets of any exercise`,
+      title: "Complete a Workout",
+      sub: `${LIFT_COMPLETE_SETS} sets of a lift, or ${WORKOUT_GOAL.cardioMinutes} min of cardio`,
       xp: XP.lift,
       done: qToday.lift,
       href: "/train",
@@ -284,7 +308,15 @@ export async function syncProgress(userId: string) {
     xp: levelProgress(totalXP),
     levelUp: level > user.level ? level : null,
     streak: { current: streak, highest: highestStreak },
-    today: { date: todayKey, sets: todaySets, setGoal: WORKOUT_GOAL_SETS },
+    today: {
+      date: todayKey,
+      sets: todayRoll?.sets ?? 0,
+      setGoal: WORKOUT_GOAL_SETS,
+      cardioMinutes: todayRoll?.cardioMin ?? 0,
+      cardioGoal: WORKOUT_GOAL.cardioMinutes,
+      steps: todayRoll?.steps ?? 0,
+      stepGoal: WORKOUT_GOAL.steps,
+    },
     quests,
     questBonus: { xp: XP.quests, done: quests.every((q) => q.done) },
     achievements: ACHIEVEMENTS.map((a) => ({

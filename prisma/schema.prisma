@@ -52,6 +52,10 @@ model User {
   // (profile). "imperial" = ft/in + lb, "metric" = cm + kg.
   unitSystem String @default("imperial") @map("unit_system")
 
+  // Where they train: "gym" | "dumbbells" | "bodyweight". Drives swap
+  // suggestions and which templates are recommended.
+  equipment String @default("gym")
+
   // User-chosen daily calorie target. Null → maintenance + goal offset.
   customCalories Int? @map("custom_calories")
 
@@ -80,6 +84,7 @@ model User {
   workoutSplits  WorkoutSplit[]
   exercises      Exercise[]
   workoutLogs    WorkoutLog[]
+  cardioLogs     CardioLog[]
   progressPhotos ProgressPhoto[]
   weightLogs     WeightLog[]
   achievements   Achievement[]
@@ -163,6 +168,9 @@ model Exercise {
   splitId   String?         @map("split_id") // legacy — superseded by split_exercises
   split     WorkoutSplit?   @relation(fields: [splitId], references: [id], onDelete: SetNull)
   name      String
+  // How sets are recorded: "weight" (lb × reps), "bodyweight" (added/assisted
+  // lb × reps, 0 = BW), or "duration" (seconds held).
+  kind      String          @default("weight")
   sortOrder Int             @default(0) @map("sort_order")
   createdAt DateTime        @default(now()) @map("created_at")
   logs      WorkoutLog[]
@@ -193,12 +201,28 @@ model WorkoutLog {
   exerciseId String   @map("exercise_id")
   exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   logDate    DateTime @map("log_date") @db.Date
-  sets       Json // [{ "weight": 225, "reps": 8 }] — weight in lb
+  sets       Json // [{ "weight": 225, "reps": 8 }] (lb; bodyweight: added load, may be negative) or [{ "seconds": 45 }]
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, exerciseId, logDate])
   @@map("workout_logs")
+}
+
+// Walks, runs, rides, rows, HIIT — training that isn't sets × reps.
+model CardioLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logDate    DateTime @map("log_date") @db.Date
+  activity   String // walk | run | cycle | row | hiit
+  minutes    Int
+  distanceKm Decimal? @map("distance_km") @db.Decimal(6, 2)
+  steps      Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId, logDate])
+  @@map("cardio_logs")
 }
 
 // ---------- Progress ----------

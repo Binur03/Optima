@@ -36,6 +36,18 @@ export function liftStep(u: UnitSystem) {
   return (current: number) => (u === "metric" ? (current < 20 ? 1.25 : 2.5) : current < 50 ? 2.5 : 5);
 }
 
+// Cardio distance: stored in km, shown in mi (imperial) or km.
+const KM_PER_MI = 1.609344;
+export function distanceUnit(u: UnitSystem) {
+  return u === "metric" ? "km" : "mi";
+}
+export function kmToDisplay(km: number, u: UnitSystem) {
+  return tidy(round(u === "metric" ? km : km / KM_PER_MI, 0.01));
+}
+export function displayToKm(value: number, u: UnitSystem) {
+  return tidy(u === "metric" ? value : value * KM_PER_MI);
+}
+
 export function cmToFeetInches(cm: number): { ft: number; in: number } {
   const totalIn = Math.round(cm / CM_PER_IN);
   return { ft: Math.floor(totalIn / 12), in: totalIn % 12 };

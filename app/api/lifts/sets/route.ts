@@ -10,11 +10,11 @@ async function context(req: NextRequest, exerciseId: unknown) {
   if (!userId) return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   const owned = await prisma.exercise.findFirst({
     where: { id: typeof exerciseId === "string" ? exerciseId : "", userId },
-    select: { id: true },
+    select: { id: true, kind: true },
   });
   if (!owned) return { error: NextResponse.json({ error: "exercise_not_found" }, { status: 404 }) };
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { timezone: true } });
-  return { userId, exerciseId: owned.id, today: localDateOnly(user.timezone) };
+  return { userId, exerciseId: owned.id, kind: owned.kind, today: localDateOnly(user.timezone) };
 }
 
 async function todaysSets(userId: string, exerciseId: string, today: Date): Promise<LiftSet[]> {
@@ -25,9 +25,11 @@ async function todaysSets(userId: string, exerciseId: string, today: Date): Prom
   return parseSets(log?.sets);
 }
 
-// POST /api/lifts/sets  { exerciseId, weight, reps } — appends one set to today.
+// POST /api/lifts/sets — appends one set to today.
+//   weighted / bodyweight: { exerciseId, weight, reps } (bodyweight weight = added lb, may be negative)
+//   timed hold:            { exerciseId, seconds }
 export async function POST(req: NextRequest) {
-  let body: { exerciseId?: string; weight?: number; reps?: number };
+  let body: { exerciseId?: string; weight?: number; reps?: number; seconds?: number };
   try {
     body = await req.json();
   } catch {
@@ -37,12 +39,22 @@ export async function POST(req: NextRequest) {
   const ctx = await context(req, body.exerciseId);
   if ("error" in ctx) return ctx.error;
 
-  const weight = Number(body.weight);
-  const reps = Number(body.reps);
-  if (!Number.isFinite(weight) || weight < 0 || weight > 2000 || !Number.isInteger(reps) || reps < 1 || reps > 100) {
-    return NextResponse.json({ error: "invalid_set" }, { status: 400 });
+  let set: string;
+  if (ctx.kind === "duration") {
+    const seconds = Math.round(Number(body.seconds));
+    if (!Number.isFinite(seconds) || seconds < 1 || seconds > 7200) {
+      return NextResponse.json({ error: "invalid_set" }, { status: 400 });
+    }
+    set = JSON.stringify([{ seconds }]);
+  } else {
+    const weight = Number(body.weight ?? 0);
+    const reps = Number(body.reps);
+    const minWeight = ctx.kind === "bodyweight" ? -500 : 0; // assisted pull-ups go negative
+    if (!Number.isFinite(weight) || weight < minWeight || weight > 2000 || !Number.isInteger(reps) || reps < 1 || reps > 200) {
+      return NextResponse.json({ error: "invalid_set" }, { status: 400 });
+    }
+    set = JSON.stringify([{ weight: Math.round(weight * 4) / 4, reps }]);
   }
-  const set = JSON.stringify([{ weight: Math.round(weight * 4) / 4, reps }]);
 
   // Atomic append — rapid confirm taps can't overwrite each other.
   await prisma.$executeRaw(Prisma.sql`

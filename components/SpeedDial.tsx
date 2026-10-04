@@ -10,8 +10,8 @@ const ACTIONS = [
     href: "/log",
     label: "Food",
     tint: "bg-emerald-500 text-zinc-950 shadow-emerald-500/40",
-    x: -84,
-    y: -64,
+    x: -124,
+    y: -48,
     icon: (
       <>
         <path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5" />
@@ -23,16 +23,29 @@ const ACTIONS = [
     href: "/train",
     label: "Lift",
     tint: "bg-sky-400 text-zinc-950 shadow-sky-400/40",
-    x: 0,
-    y: -104,
+    x: -44,
+    y: -108,
     icon: <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />,
+  },
+  {
+    href: "/train?cardio=1",
+    label: "Cardio",
+    tint: "bg-violet-400 text-zinc-950 shadow-violet-400/40",
+    x: 44,
+    y: -108,
+    icon: (
+      <>
+        <circle cx="13.5" cy="4.5" r="1.8" />
+        <path d="M9 21l2.5-5.5L14 17v4M7 12.5l3-3.5 3.5 1.5 2.5 3 2.5.5M11.5 15.5 13 10" />
+      </>
+    ),
   },
   {
     href: "/history?add=1",
     label: "Photo",
     tint: "bg-rose-500 text-white shadow-rose-500/40",
-    x: 84,
-    y: -64,
+    x: 124,
+    y: -48,
     icon: (
       <>
         <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.6a1 1 0 0 1 .8-.4h3.8a1 1 0 0 1 .8.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" />
@@ -87,7 +100,11 @@ export function SpeedDial({ open, onClose }: { open: boolean; onClose: () => voi
                 <Link
                   href={a.href}
                   role="menuitem"
-                  onClick={onClose}
+                  onClick={() => {
+                    // Already on Train? The page won't remount, so ask it to open the sheet.
+                    if (a.href.includes("cardio")) window.dispatchEvent(new Event("optima:open-cardio"));
+                    onClose();
+                  }}
                   className="flex flex-col items-center gap-1.5 [touch-action:manipulation]"
                 >
                   <span className={`grid h-14 w-14 place-items-center rounded-full shadow-lg ring-4 ring-zinc-950/60 active:scale-95 ${a.tint}`}>

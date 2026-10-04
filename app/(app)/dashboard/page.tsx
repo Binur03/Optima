@@ -11,6 +11,7 @@ import { DailyQuests } from "@/components/DailyQuests";
 import { WeeklyCaloriesChart } from "@/components/charts/WeeklyCaloriesChart";
 import { TargetsSheet, type TargetsChange } from "@/components/TargetsSheet";
 import { PROGRESS_KEY, useProgress } from "@/lib/useProgress";
+import type { ProgressState } from "@/lib/gamification";
 import { MealGroups } from "@/components/MealGroups";
 import { refreshFood, useCopyMeal, useMeals } from "@/lib/useMeals";
 import type { DeltaResult, Goal } from "@/lib/delta";
@@ -393,8 +394,7 @@ export default function DashboardPage() {
       <ActivitySummary
         macros={data.macros}
         macroTargets={data.macroTargets}
-        sets={progress?.today.sets ?? 0}
-        setGoal={progress?.today.setGoal ?? 12}
+        workout={progress?.today}
       />
 
       {progress && <DailyQuests quests={progress.quests} bonus={progress.questBonus} />}
@@ -533,20 +533,26 @@ function ContextPrompt({ data }: { data: DashboardData }) {
 function ActivitySummary({
   macros,
   macroTargets,
-  sets,
-  setGoal,
+  workout,
 }: {
   macros: DashboardData["macros"];
   macroTargets: DashboardData["macroTargets"];
-  sets: number;
-  setGoal: number;
+  workout?: ProgressState["today"];
 }) {
   const rows = [
     { label: "Protein", value: Math.round(macros.protein), goal: macroTargets?.protein ?? 0, tint: "text-emerald-400", ...RING_COLORS.protein },
     { label: "Carbs", value: Math.round(macros.carbs), goal: macroTargets?.carbs ?? 0, tint: "text-amber-400", ...RING_COLORS.carbs },
     { label: "Fat", value: Math.round(macros.fat), goal: macroTargets?.fat ?? 0, tint: "text-rose-400", ...RING_COLORS.fat },
   ];
-  const workoutDone = sets >= setGoal;
+  // The Workout ring closes on ANY of: 12 sets, 20 min cardio, 8,000 steps —
+  // show whichever is furthest along.
+  const paths = [
+    { value: workout?.sets ?? 0, goal: workout?.setGoal ?? 12, unit: "sets" },
+    { value: workout?.cardioMinutes ?? 0, goal: workout?.cardioGoal ?? 20, unit: "min cardio" },
+    { value: workout?.steps ?? 0, goal: workout?.stepGoal ?? 8000, unit: "steps" },
+  ];
+  const best = paths.reduce((a, p) => (p.value / p.goal > a.value / a.goal ? p : a), paths[0]);
+  const workoutDone = best.value >= best.goal;
 
   return (
     <section className="rounded-3xl border border-white/5 bg-neutral-900/80 p-5 shadow-soft" aria-label="Macros and workout">
@@ -571,13 +577,18 @@ function ActivitySummary({
         href="/train"
         className="mt-4 flex items-center gap-3 border-t border-white/5 pt-4 transition hover:opacity-90"
       >
-        <ActivityRing rings={[{ label: "Workout", value: sets, goal: setGoal, ...RING_COLORS.workout }]} size={40} stroke={6} />
+        <ActivityRing rings={[{ label: "Workout", value: best.value, goal: best.goal, ...RING_COLORS.workout }]} size={40} stroke={6} />
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-sky-400">Workout{workoutDone && <span aria-label="goal reached"> ✓</span>}</span>
           <span className="block text-sm font-semibold tabular-nums text-white">
-            {sets}
-            <span className="font-medium text-neutral-500">/{setGoal} sets</span>
+            {best.value.toLocaleString()}
+            <span className="font-medium text-neutral-500">
+              /{best.goal.toLocaleString()} {best.unit}
+            </span>
           </span>
+          {best.value === 0 && (
+            <span className="block text-[11px] text-neutral-500">12 sets, 20 min cardio, or 8,000 steps</span>
+          )}
         </span>
         <span className="text-xs font-semibold text-neutral-500">Train ›</span>
       </Link>

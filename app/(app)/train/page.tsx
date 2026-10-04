@@ -7,6 +7,14 @@ import { ExerciseCard, type SplitsData } from "@/components/ExerciseCard";
 import { ProgramSheet } from "@/components/ProgramSheet";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { send } from "@/lib/trainApi";
+import { CardioCard } from "@/components/CardioCard";
+import { totalVolume, type Equipment } from "@/lib/lifts";
+
+const EQUIPMENT: { key: Equipment; label: string; icon: string }[] = [
+  { key: "gym", label: "Gym", icon: "🏢" },
+  { key: "dumbbells", label: "Dumbbells", icon: "🏋️" },
+  { key: "bodyweight", label: "Bodyweight", icon: "🤸" },
+];
 import { UnitToggle } from "@/components/UnitToggle";
 import { useUnits } from "@/lib/useUnits";
 import { lbToDisplay, weightUnit } from "@/lib/units";
@@ -41,6 +49,29 @@ export default function TrainPage() {
   const [newName, setNewName] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const { units } = useUnits();
+  // The + speed dial's "Cardio" bubble links here with ?cardio=1.
+  const [cardioOpen, setCardioOpen] = useState(false);
+  const [cardioNonce, setCardioNonce] = useState(0);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("cardio")) setCardioOpen(true);
+    const open = () => {
+      setCardioOpen(true);
+      setCardioNonce((n) => n + 1);
+    };
+    window.addEventListener("optima:open-cardio", open);
+    return () => window.removeEventListener("optima:open-cardio", open);
+  }, []);
+
+  const setEquipment = useMutation({
+    mutationFn: (equipment: Equipment) => send("/api/profile/equipment", "POST", { equipment }),
+    // Instant: swap suggestions update before the save lands.
+    onMutate: (equipment) => {
+      const prev = qc.getQueryData<SplitsData>(["lift-splits"]);
+      if (prev) qc.setQueryData<SplitsData>(["lift-splits"], { ...prev, equipment });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(["lift-splits"], ctx.prev),
+  });
 
   // Default day: one already trained today, else the last one picked, else the first.
   const programId = data?.program?.id;
@@ -82,7 +113,7 @@ export default function TrainPage() {
 
   // An exercise in two days appears twice — count each lift's sets once.
   const uniqueToday = [...new Map(data.splits.flatMap((s) => s.exercises).map((e) => [e.id, e.today])).values()].flat();
-  const volume = uniqueToday.reduce((sum, s) => sum + s.weight * s.reps, 0);
+  const volume = totalVolume(uniqueToday);
 
   return (
     <main className="flex flex-col gap-4 pb-4">
@@ -99,6 +130,25 @@ export default function TrainPage() {
           </p>
         </div>
       </header>
+
+      {/* Where are you training? Drives swap suggestions and template picks. */}
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.04] p-1 ring-1 ring-inset ring-white/5" role="radiogroup" aria-label="Equipment">
+        {EQUIPMENT.map((o) => (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={data.equipment === o.key}
+            onClick={() => setEquipment.mutate(o.key)}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition ${
+              data.equipment === o.key ? "bg-white text-zinc-950" : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            <span aria-hidden>{o.icon}</span>
+            {o.label}
+          </button>
+        ))}
+      </div>
 
       {/* Program switcher */}
       <button
@@ -172,7 +222,13 @@ export default function TrainPage() {
                 </p>
               )}
               {active.exercises.map((e, i) => (
-                <ExerciseCard key={`${active.id}-${e.id}`} exercise={e} defaultOpen={i === 0} />
+                <ExerciseCard
+                  key={`${active.id}-${e.id}`}
+                  exercise={e}
+                  defaultOpen={i === 0}
+                  splitId={active.id}
+                  equipment={data.equipment}
+                />
               ))}
 
               <form
@@ -212,7 +268,9 @@ export default function TrainPage() {
         </>
       )}
 
-      <ProgramSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <CardioCard autoOpen={cardioOpen} openSignal={cardioNonce} />
+
+      <ProgramSheet open={sheetOpen} onClose={() => setSheetOpen(false)} equipment={data.equipment} />
     </main>
   );
 }

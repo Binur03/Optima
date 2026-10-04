@@ -7,8 +7,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SplitsData } from "@/components/ExerciseCard";
 import { SplitSheet } from "@/components/SplitSheet";
 import { send, trainError } from "@/lib/trainApi";
+import type { ExerciseKind } from "@/lib/lifts";
 
 type Day = SplitsData["splits"][number];
+
+const KIND_LABEL: Record<ExerciseKind, string> = { weight: "Weight", bodyweight: "BW", duration: "Timed" };
+const NEXT_KIND: Record<ExerciseKind, ExerciseKind> = { weight: "bodyweight", bodyweight: "duration", duration: "weight" };
 
 export default function ProgramEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -225,7 +229,14 @@ function DayCard({
     mutationFn: (v: { exerciseId: string; move: 1 | -1 }) => send(`${base}/exercises`, "PATCH", v),
     onSuccess: onChanged,
   });
-  const error = update.error ?? remove.error ?? addExercise.error ?? removeExercise.error ?? moveExercise.error;
+  // How the lift is recorded: weight × reps → bodyweight → timed hold → …
+  const setKind = useMutation({
+    mutationFn: (v: { exerciseId: string; kind: ExerciseKind }) =>
+      send(`/api/lifts/exercises/${v.exerciseId}`, "PATCH", { kind: v.kind }),
+    onSuccess: onChanged,
+  });
+  const error =
+    update.error ?? remove.error ?? addExercise.error ?? removeExercise.error ?? moveExercise.error ?? setKind.error;
 
   return (
     <div className="overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/5">
@@ -278,6 +289,16 @@ function DayCard({
             {day.exercises.map((e, i) => (
               <li key={e.id} className="flex items-center gap-1 rounded-xl bg-white/[0.03] py-1 pl-3 pr-1">
                 <span className="min-w-0 flex-1 truncate text-sm text-white">{e.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setKind.mutate({ exerciseId: e.id, kind: NEXT_KIND[e.kind] })}
+                  disabled={setKind.isPending}
+                  aria-label={`${e.name} is recorded as ${KIND_LABEL[e.kind]}. Tap to change`}
+                  title="Tap to change how sets are recorded"
+                  className="shrink-0 rounded-md bg-white/[0.06] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-300 transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  {KIND_LABEL[e.kind]}
+                </button>
                 <button
                   type="button"
                   aria-label={`Move ${e.name} up`}

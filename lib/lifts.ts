@@ -29,9 +29,37 @@ export function totalVolume(sets: LiftSet[]): number {
   return sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
 }
 
+// Trims and collapses whitespace; null when the length is out of range.
+export function cleanName(value: unknown, max: number): string | null {
+  const name = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return name.length >= 2 && name.length <= max ? name : null;
+}
+export const MAX_SPLIT_NAME = 40;
+export const MAX_EXERCISE_NAME = 60;
+
+export interface SplitPreset {
+  name: string;
+  exercises: string[];
+}
+
 // Provisioned the first time a user opens the tracker.
-export const DEFAULT_SPLITS: { name: string; exercises: string[] }[] = [
+export const DEFAULT_SPLITS: SplitPreset[] = [
   { name: "Push", exercises: ["Bench Press", "Overhead Press", "Incline Dumbbell Press", "Tricep Pushdown"] },
   { name: "Pull", exercises: ["Deadlift", "Pull-Up", "Barbell Row", "Bicep Curl"] },
   { name: "Legs", exercises: ["Back Squat", "Romanian Deadlift", "Leg Press", "Calf Raise"] },
+];
+
+// Starting points offered when adding a split. Exercises are shared by name,
+// so "Bench Press" in Push and in Chest & Back is the same lift and history.
+export const SPLIT_PRESETS: SplitPreset[] = [
+  ...DEFAULT_SPLITS,
+  { name: "Chest & Back", exercises: ["Bench Press", "Incline Dumbbell Press", "Barbell Row", "Lat Pulldown", "Cable Fly"] },
+  { name: "Shoulders & Arms", exercises: ["Overhead Press", "Lateral Raise", "Rear Delt Fly", "Bicep Curl", "Tricep Pushdown"] },
+  { name: "Upper", exercises: ["Bench Press", "Barbell Row", "Overhead Press", "Lat Pulldown", "Bicep Curl", "Tricep Pushdown"] },
+  { name: "Lower", exercises: ["Back Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raise"] },
+  { name: "Full Body", exercises: ["Back Squat", "Bench Press", "Barbell Row", "Overhead Press", "Romanian Deadlift"] },
+  { name: "Chest", exercises: ["Bench Press", "Incline Dumbbell Press", "Cable Fly", "Dips"] },
+  { name: "Back", exercises: ["Pull-Up", "Barbell Row", "Lat Pulldown", "Seated Cable Row"] },
+  { name: "Shoulders", exercises: ["Overhead Press", "Lateral Raise", "Rear Delt Fly", "Face Pull"] },
+  { name: "Arms", exercises: ["Bicep Curl", "Hammer Curl", "Tricep Pushdown", "Skull Crusher"] },
 ];

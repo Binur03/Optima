@@ -64,6 +64,8 @@ export async function GET(req: NextRequest) {
     hasWearable: user.hasWearable,
     streak,
     macroTargets,
+    customTarget: target.customTarget,
+    customMacros: stored !== null,
     burnedToday: todayLog?.caloriesOut ?? null,
     steps: todayLog?.steps ?? null,
     activeZoneMinutes: todayLog?.activeZoneMinutes ?? null,

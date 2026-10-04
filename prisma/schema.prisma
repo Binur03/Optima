@@ -48,6 +48,9 @@ model User {
   manualTdee    Int?    @map("manual_tdee")
   activityLevel String? @map("activity_level") // sedentary|light|moderate|active|very_active
 
+  // User-chosen daily calorie target. Null → maintenance + goal offset.
+  customCalories Int? @map("custom_calories")
+
   // Macro goals (grams). Null → derived from the calorie target on the fly.
   targetProtein Int? @map("target_protein")
   targetCarbs   Int? @map("target_carbs")
@@ -116,27 +119,44 @@ model WorkoutSplit {
   userId    String     @map("user_id")
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String // "Push", "Pull", "Legs", …
-  sortOrder Int        @default(0) @map("sort_order")
-  createdAt DateTime   @default(now()) @map("created_at")
-  exercises Exercise[]
+  sortOrder Int             @default(0) @map("sort_order")
+  createdAt DateTime        @default(now()) @map("created_at")
+  exercises Exercise[] // legacy single-split link; membership lives in `items`
+  items     SplitExercise[]
 
   @@unique([userId, name])
   @@map("workout_splits")
 }
 
+// An exercise is one lift with one history (e.g. "Bench Press"); it can sit in
+// any number of splits, so Push and Chest & Back can both include it.
 model Exercise {
-  id        String        @id @default(uuid())
-  userId    String        @map("user_id")
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  splitId   String?       @map("split_id")
-  split     WorkoutSplit? @relation(fields: [splitId], references: [id], onDelete: SetNull)
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  splitId   String?         @map("split_id") // legacy — superseded by split_exercises
+  split     WorkoutSplit?   @relation(fields: [splitId], references: [id], onDelete: SetNull)
   name      String
-  sortOrder Int           @default(0) @map("sort_order")
-  createdAt DateTime      @default(now()) @map("created_at")
+  sortOrder Int             @default(0) @map("sort_order")
+  createdAt DateTime        @default(now()) @map("created_at")
   logs      WorkoutLog[]
+  splits    SplitExercise[]
 
   @@unique([userId, name])
   @@map("exercises")
+}
+
+model SplitExercise {
+  id         String       @id @default(uuid())
+  splitId    String       @map("split_id")
+  split      WorkoutSplit @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  exerciseId String       @map("exercise_id")
+  exercise   Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  sortOrder  Int          @default(0) @map("sort_order")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([splitId, exerciseId])
+  @@map("split_exercises")
 }
 
 // One row per exercise per day; sets append atomically.

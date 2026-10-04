@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
 import { DEFAULT_GOAL_DELTAS } from "@/lib/goals";
 import { isValidTimeZone } from "@/lib/datetime";
-import { defaultMacroTargets } from "@/lib/nutrition";
 import type { Goal } from "@/lib/delta";
 
 const SEXES = ["MALE", "FEMALE", "OTHER"] as const;
@@ -14,7 +13,7 @@ const ACTIVITIES = ["sedentary", "light", "moderate", "active", "very_active"] a
 // Wearable users: { goal, goalDelta?, timezone?, hasWearable:true }
 // Manual users:   { ...+ age, sex, heightCm, weightKg, activityLevel, manualTdee }
 // Updates the authenticated user's profile; for manual users also stores the
-// Mifflin-St Jeor maintenance and derived macro targets.
+// Mifflin-St Jeor maintenance. Resets calorie and macro targets to automatic.
 export async function POST(req: NextRequest) {
   const userId = await getCurrentUserId(req);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -55,6 +54,8 @@ export async function POST(req: NextRequest) {
     goal,
     goalDelta,
     hasWearable,
+    // Running Setup means "calculate it for me" — drop any custom calorie target.
+    customCalories: null,
     ...(timezone ? { timezone } : {}),
   };
 
@@ -79,16 +80,13 @@ export async function POST(req: NextRequest) {
     if (sex) data.sex = sex;
     if (activityLevel) data.activityLevel = activityLevel;
 
-    if (manualTdee !== undefined) {
-      const tdee = Math.round(manualTdee);
-      data.manualTdee = tdee;
-      // Macro targets from the goal-adjusted intake.
-      const macros = defaultMacroTargets(Math.max(0, tdee + goalDelta));
-      data.targetProtein = macros.protein;
-      data.targetCarbs = macros.carbs;
-      data.targetFat = macros.fat;
-    }
+    if (manualTdee !== undefined) data.manualTdee = Math.round(manualTdee);
   }
+  // Macros go back to "auto" (derived from the calorie target), so they follow
+  // later goal changes. Custom grams are set in the Daily targets sheet.
+  data.targetProtein = null;
+  data.targetCarbs = null;
+  data.targetFat = null;
 
   await prisma.user.update({ where: { id: userId }, data });
   return NextResponse.json({ ok: true, goal, goalDelta, hasWearable });

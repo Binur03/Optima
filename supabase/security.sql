@@ -57,3 +57,11 @@ alter table public.progress_photos enable row level security;
 alter table public.weight_logs    enable row level security;
 alter table public.achievements   enable row level security;
 alter table public.xp_events      enable row level security;
+alter table public.split_exercises enable row level security;
+
+-- 4) One-time backfill: carry each exercise's legacy split into split_exercises.
+insert into public.split_exercises (id, split_id, exercise_id, sort_order)
+select gen_random_uuid()::text, e.split_id, e.id, e.sort_order
+from public.exercises e
+where e.split_id is not null
+on conflict (split_id, exercise_id) do nothing;

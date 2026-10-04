@@ -34,7 +34,13 @@ function LoginInner() {
     try {
       const supabase = browserSupabase();
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        // Send the confirmation link back to whichever site they signed up on
+        // (must be listed under Supabase Auth → URL Configuration → Redirect URLs).
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/login` },
+        });
         if (error) return setError(error.message);
         // If email confirmation is on, there's no session yet.
         const { data } = await supabase.auth.getSession();

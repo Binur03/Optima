@@ -31,7 +31,7 @@ export function DeltaBar({ delta, goal, children }: Props) {
     return (
       <section className="rounded-3xl border border-white/5 bg-neutral-900/80 p-6 shadow-soft">
         <p className="m-0 text-center text-sm text-neutral-400">
-          Set up your baseline to see today’s target.
+          No target yet — finish Setup, or set your own calories with the sliders button above.
         </p>
         {children && <div className="mt-6 border-t border-white/5 pt-5">{children}</div>}
       </section>

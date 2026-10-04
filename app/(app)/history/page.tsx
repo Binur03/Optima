@@ -6,26 +6,19 @@ import { browserSupabase, supabaseConfigured } from "@/lib/supabase";
 import { fileToDownscaledJpeg } from "@/lib/image";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { CompareMode, PhotoCaption, type ProgressPhotoView as Photo } from "@/components/CompareMode";
+import { MonthCalendar, localKey } from "@/components/MonthCalendar";
 
 const BUCKET = "progress-photos";
 
-// Local calendar day as "YYYY-MM-DD".
-function localKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function startOfWeek(d: Date): Date {
-  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  s.setDate(s.getDate() - s.getDay()); // Sunday
-  return s;
-}
 export default function HistoryPage() {
   const qc = useQueryClient();
   const configured = supabaseConfigured();
   const todayKey = localKey(new Date());
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [month, setMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadDate, setUploadDate] = useState(todayKey);
   const [comparing, setComparing] = useState(false);
   const [picks, setPicks] = useState<string[]>([]);
 
@@ -71,12 +64,14 @@ export default function HistoryPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["progress-photos"] }),
   });
 
-  const photoDays = new Set(photos.map((p) => p.takenOn));
-  const week = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  const photoCounts = new Map<string, number>();
+  for (const p of photos) photoCounts.set(p.takenOn, (photoCounts.get(p.takenOn) ?? 0) + 1);
+
+  function openUpload(day: string) {
+    setComparing(false);
+    setUploadDate(day);
+    setUploadOpen(true);
+  }
   const visible = selectedDay ? photos.filter((p) => p.takenOn === selectedDay) : photos;
   const compared = picks.map((id) => photos.find((p) => p.id === id)).filter((p): p is Photo => !!p);
 
@@ -121,7 +116,7 @@ export default function HistoryPage() {
           </button>
           <button
             type="button"
-            onClick={() => setUploadOpen((o) => !o)}
+            onClick={() => (uploadOpen ? setUploadOpen(false) : openUpload(selectedDay ?? todayKey))}
             aria-label="Add progress photo"
             className="grid h-9 w-9 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-400"
           >
@@ -134,73 +129,42 @@ export default function HistoryPage() {
 
       {uploadOpen && (
         <UploadCard
+          key={uploadDate}
           todayKey={todayKey}
+          initialDate={uploadDate}
           onClose={() => setUploadOpen(false)}
-          onUploaded={() => {
+          onUploaded={(takenOn) => {
             setUploadOpen(false);
+            // Jump the calendar to the photo's month and show that day.
+            setMonth(new Date(`${takenOn}T12:00:00`));
+            setSelectedDay(takenOn);
             qc.invalidateQueries({ queryKey: ["progress-photos"] });
             qc.invalidateQueries({ queryKey: ["weight-trend"] });
           }}
         />
       )}
 
-      {/* Weekly strip */}
-      <section className="rounded-3xl border border-white/5 bg-neutral-900 p-4" aria-label="Photo calendar">
-        <div className="mb-3 flex items-center justify-between px-1">
-          <button type="button" onClick={() => setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() - 7))} aria-label="Previous week" className={ARROW}>
-            ‹
-          </button>
-          <p className="m-0 text-sm font-semibold text-white">
-            {week[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
-            {week[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </p>
-          <button
-            type="button"
-            onClick={() => setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7))}
-            disabled={localKey(week[6]) >= todayKey}
-            aria-label="Next week"
-            className={ARROW}
-          >
-            ›
-          </button>
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {week.map((d) => {
-            const key = localKey(d);
-            const has = photoDays.has(key);
-            const selected = selectedDay === key;
-            const future = key > todayKey;
-            return (
-              <button
-                key={key}
-                type="button"
-                disabled={future}
-                onClick={() => setSelectedDay(selected ? null : key)}
-                aria-pressed={selected}
-                aria-label={`${d.toDateString()}${has ? ", has photos" : ""}`}
-                className={`flex flex-col items-center gap-1 rounded-2xl py-2 transition disabled:opacity-30 ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.04]"
-                }`}
-              >
-                <span className="text-[10px] font-medium uppercase text-neutral-500">
-                  {d.toLocaleDateString("en-US", { weekday: "narrow" })}
-                </span>
-                <span
-                  className={`grid h-8 w-8 place-items-center rounded-full text-sm font-semibold tabular-nums ${
-                    key === todayKey ? "bg-white text-zinc-950" : "text-white"
-                  }`}
-                >
-                  {d.getDate()}
-                </span>
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${has ? "bg-rose-400 shadow-[0_0_8px_2px_rgba(251,113,133,0.7)]" : "bg-transparent"}`}
-                  aria-hidden
-                />
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <MonthCalendar
+        month={month}
+        onMonthChange={setMonth}
+        photoCounts={photoCounts}
+        selected={selectedDay}
+        onSelect={setSelectedDay}
+        todayKey={todayKey}
+      />
+
+      {selectedDay && !comparing && !uploadOpen && (
+        <button
+          type="button"
+          onClick={() => openUpload(selectedDay)}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-rose-500/10 py-3 text-sm font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/25 transition hover:bg-rose-500/15"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden>
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add photo for {formatDay(selectedDay)}
+        </button>
+      )}
 
       {/* Compare view */}
       {comparing && (
@@ -289,17 +253,19 @@ export default function HistoryPage() {
 
 function UploadCard({
   todayKey,
+  initialDate,
   onClose,
   onUploaded,
 }: {
   todayKey: string;
+  initialDate: string; // the calendar day that was tapped, or today
   onClose: () => void;
-  onUploaded: () => void;
+  onUploaded: (takenOn: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [takenOn, setTakenOn] = useState(todayKey);
+  const [takenOn, setTakenOn] = useState(initialDate);
   const [weight, setWeight] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -344,7 +310,7 @@ function UploadCard({
         await supabase.storage.from(BUCKET).remove([path]); // don't leave an orphaned file
         throw new Error("Couldn’t save the photo details.");
       }
-      onUploaded();
+      onUploaded(takenOn);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -414,6 +380,3 @@ function UploadCard({
     </section>
   );
 }
-
-const ARROW =
-  "grid h-8 w-8 place-items-center rounded-full text-lg text-neutral-400 transition hover:bg-white/5 hover:text-white disabled:opacity-30";

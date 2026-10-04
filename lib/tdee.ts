@@ -9,7 +9,8 @@ export interface TdeeResult {
 export interface TargetResult extends TdeeResult {
   goal: "CUT" | "MAINTAIN" | "BULK";
   goalDelta: number;
-  targetIntake: number | null; // tdee + goalDelta
+  targetIntake: number | null; // user's custom target, else tdee + goalDelta
+  customTarget: boolean;
 }
 
 const WINDOW = 7;
@@ -56,7 +57,7 @@ export async function computeTarget(
 ): Promise<TargetResult> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { goal: true, goalDelta: true, hasWearable: true, manualTdee: true },
+    select: { goal: true, goalDelta: true, hasWearable: true, manualTdee: true, customCalories: true },
   });
 
   // Manual users: maintenance is the stored Mifflin-St Jeor estimate. Wearable
@@ -66,9 +67,12 @@ export async function computeTarget(
       ? { tdee: user.manualTdee, daysUsed: 0, estimating: false }
       : await computeRollingTdee(userId, endDate);
 
-  const targetIntake = tdeeResult.tdee === null ? null : tdeeResult.tdee + user.goalDelta;
+  // A calorie target the user picked themselves wins over the computed one.
+  const customTarget = user.customCalories != null;
+  const targetIntake =
+    user.customCalories ?? (tdeeResult.tdee === null ? null : tdeeResult.tdee + user.goalDelta);
 
-  return { ...tdeeResult, goal: user.goal, goalDelta: user.goalDelta, targetIntake };
+  return { ...tdeeResult, goal: user.goal, goalDelta: user.goalDelta, targetIntake, customTarget };
 }
 
 function toDateOnly(d: Date): Date {

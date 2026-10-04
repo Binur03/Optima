@@ -9,6 +9,7 @@ import { TdeeBadge } from "@/components/TdeeBadge";
 import { ActivityRing, RING_COLORS } from "@/components/ActivityRing";
 import { DailyQuests } from "@/components/DailyQuests";
 import { WeeklyCaloriesChart } from "@/components/charts/WeeklyCaloriesChart";
+import { TargetsSheet, type TargetsChange } from "@/components/TargetsSheet";
 import { PROGRESS_KEY, useProgress } from "@/lib/useProgress";
 import type { DeltaResult, Goal } from "@/lib/delta";
 
@@ -33,6 +34,8 @@ interface DashboardData {
   hasWearable: boolean;
   streak: number;
   macroTargets: { protein: number; carbs: number; fat: number } | null;
+  customTarget: boolean;
+  customMacros: boolean;
   delta: DeltaResult;
 }
 
@@ -114,7 +117,12 @@ export default function DashboardPage() {
       const prev = qc.getQueryData<DashboardData>(["dashboard"]);
       if (prev) {
         const goalDelta = deltaForGoal(goal, prev.cutDelta, prev.bulkDelta);
-        const targetIntake = prev.tdee.value === null ? null : prev.tdee.value + goalDelta;
+        // A custom calorie target doesn't move with the goal.
+        const targetIntake = prev.customTarget
+          ? prev.delta.targetIntake
+          : prev.tdee.value === null
+            ? null
+            : prev.tdee.value + goalDelta;
         qc.setQueryData<DashboardData>(["dashboard"], {
           ...prev,
           goal,
@@ -190,23 +198,24 @@ export default function DashboardPage() {
   });
   const { data: progress } = useProgress();
 
-  // Custom goal-offset editor (modal).
+  // Daily targets sheet: goal offsets, custom calories, custom macros.
   const [editing, setEditing] = useState(false);
-  const [cutInput, setCutInput] = useState(0);
-  const [bulkInput, setBulkInput] = useState(0);
-  const savePrefs = useMutation({
-    mutationFn: async (vals: { cutDelta: number; bulkDelta: number }) => {
-      const res = await fetch("/api/profile/goal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(vals),
-      });
-      if (!res.ok) throw new Error("prefs_failed");
-      return res.json();
+  const saveTargets = useMutation({
+    mutationFn: async (change: TargetsChange) => {
+      const post = (url: string, body: unknown) =>
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (change.offsets) {
+        const res = await post("/api/profile/goal", change.offsets);
+        if (!res.ok) throw new Error("prefs_failed");
+      }
+      const res = await post("/api/profile/targets", { calories: change.calories, macros: change.macros });
+      if (!res.ok) throw new Error("targets_failed");
     },
     onSuccess: () => {
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["calories-week"] });
+      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
     },
   });
 
@@ -291,10 +300,9 @@ export default function DashboardPage() {
           <button
             type="button"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-neutral-400 ring-1 ring-inset ring-white/5 transition hover:text-white"
-            aria-label="Edit goal offsets"
+            aria-label="Edit daily targets"
             onClick={() => {
-              setCutInput(data.cutDelta);
-              setBulkInput(data.bulkDelta);
+              saveTargets.reset();
               setEditing(true);
             }}
           >
@@ -317,68 +325,23 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {editing && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-sm"
-          onClick={() => setEditing(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-neutral-900 p-6 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Custom goal offsets"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="m-0 text-lg font-semibold text-white">Custom goal offsets</h2>
-            <p className="m-0 mt-1 text-sm text-neutral-400">
-              Calories added to your maintenance TDEE for each goal.
-            </p>
-            <div className="mt-5 flex flex-col gap-4">
-              <label className="block">
-                <span className="text-xs font-medium text-neutral-400">Cut offset (kcal)</span>
-                <input
-                  type="number"
-                  value={cutInput}
-                  step={50}
-                  onChange={(e) => setCutInput(Number(e.target.value))}
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 tabular-nums text-white focus:border-emerald-500/50 focus:outline-none"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-neutral-400">Bulk offset (kcal)</span>
-                <input
-                  type="number"
-                  value={bulkInput}
-                  step={50}
-                  onChange={(e) => setBulkInput(Number(e.target.value))}
-                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 tabular-nums text-white focus:border-emerald-500/50 focus:outline-none"
-                />
-              </label>
-            </div>
-            <p className="m-0 mt-3 text-xs text-neutral-500">
-              Maintain is always 0. Defaults: Cut −500, Bulk +300.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                disabled={savePrefs.isPending}
-                className="flex-1 rounded-xl py-2.5 text-sm font-medium text-neutral-300 ring-1 ring-inset ring-white/10 transition hover:bg-white/5"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={savePrefs.isPending}
-                onClick={() => savePrefs.mutate({ cutDelta: cutInput, bulkDelta: bulkInput })}
-                className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:opacity-60"
-              >
-                {savePrefs.isPending ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TargetsSheet
+        open={editing}
+        snapshot={{
+          tdee: data.tdee.value,
+          goal: data.goal,
+          cutDelta: data.cutDelta,
+          bulkDelta: data.bulkDelta,
+          targetIntake: data.delta.targetIntake,
+          customTarget: data.customTarget,
+          macroTargets: data.macroTargets,
+          customMacros: data.customMacros,
+        }}
+        busy={saveTargets.isPending}
+        error={saveTargets.isError ? "Couldn’t save your targets. Check the numbers and try again." : null}
+        onClose={() => setEditing(false)}
+        onSave={(change) => saveTargets.mutate(change)}
+      />
 
       {reauthNeeded && (
         <a
@@ -403,12 +366,14 @@ export default function DashboardPage() {
         >
           <MetricCard label="Eaten" value={data.eatenToday} tone="eat" />
           <MetricCard
-            label={data.goalDelta === 0 ? "Target · maintain" : "Target"}
+            label={data.goalDelta === 0 && !data.customTarget ? "Target · maintain" : "Target"}
             value={data.delta.targetIntake}
             sub={
-              data.delta.targetIntake === null
-                ? "needs baseline"
-                : `${data.goalDelta >= 0 ? "+" : ""}${data.goalDelta} vs maint.`
+              data.customTarget
+                ? "your custom goal"
+                : data.delta.targetIntake === null
+                  ? "needs baseline"
+                  : `${data.goalDelta >= 0 ? "+" : ""}${data.goalDelta} vs maint.`
             }
           />
           {data.hasWearable && (

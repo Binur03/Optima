@@ -57,12 +57,13 @@ export function CompareMode({
   );
 }
 
-// Date + weight over a dark gradient so it reads on any photo.
-export function PhotoCaption({ photo }: { photo: ProgressPhotoView }) {
+// Date + weight over a dark gradient so it reads on any photo. `hideWeight`
+// keeps the number private while the photo itself is shielded.
+export function PhotoCaption({ photo, hideWeight = false }: { photo: ProgressPhotoView; hideWeight?: boolean }) {
   return (
     <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-left">
       <span className="block text-xs font-semibold text-white">{formatDay(photo.takenOn)}</span>
-      {photo.weightLb !== null && (
+      {photo.weightLb !== null && !hideWeight && (
         <span className="block text-[11px] tabular-nums text-white/70">{photo.weightLb.toFixed(1)} lb</span>
       )}
     </figcaption>

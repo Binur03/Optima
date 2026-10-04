@@ -7,8 +7,10 @@ import { fileToDownscaledJpeg } from "@/lib/image";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { CompareMode, PhotoCaption, type ProgressPhotoView as Photo } from "@/components/CompareMode";
 import { MonthCalendar, localKey } from "@/components/MonthCalendar";
+import { ShieldedPhoto } from "@/components/ShieldedPhoto";
 
 const BUCKET = "progress-photos";
+const SHIELD_KEY = "optima:privacy-shield";
 
 export default function HistoryPage() {
   const qc = useQueryClient();
@@ -19,6 +21,23 @@ export default function HistoryPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadDate, setUploadDate] = useState(todayKey);
+  // Privacy shield: on by default; the choice is remembered on this device.
+  const [shield, setShield] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SHIELD_KEY) === "off") setShield(false);
+    } catch {
+      /* storage unavailable — stay shielded */
+    }
+  }, []);
+  function setShieldPref(on: boolean) {
+    setShield(on);
+    try {
+      localStorage.setItem(SHIELD_KEY, on ? "on" : "off");
+    } catch {
+      /* storage unavailable — applies to this visit only */
+    }
+  }
   const [comparing, setComparing] = useState(false);
   const [picks, setPicks] = useState<string[]>([]);
 
@@ -101,6 +120,21 @@ export default function HistoryPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShieldPref(!shield)}
+            aria-pressed={shield}
+            aria-label={shield ? "Privacy shield on — photos are blurred" : "Privacy shield off — photos are visible"}
+            title={shield ? "Privacy shield on" : "Privacy shield off"}
+            className={`grid h-9 w-9 place-items-center rounded-full transition ${
+              shield ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" : "bg-neutral-900 text-neutral-400 ring-1 ring-inset ring-white/10 hover:text-white"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6z" />
+              {shield ? <path d="m9 12 2 2 4-4" /> : <path d="M9.5 9.5l5 5M14.5 9.5l-5 5" />}
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -203,20 +237,21 @@ export default function HistoryPage() {
             const pickIndex = picks.indexOf(p.id);
             return (
               <div key={p.id} className="relative mb-3 break-inside-avoid overflow-hidden rounded-3xl bg-neutral-900">
-                <button
-                  type="button"
-                  disabled={!comparing}
-                  onClick={() => togglePick(p.id)}
-                  aria-label={comparing ? `Select photo from ${formatDay(p.takenOn)}` : undefined}
-                  className={`block w-full disabled:cursor-default ${pickIndex >= 0 ? "ring-4 ring-inset ring-emerald-400" : ""}`}
-                >
-                  {urls[p.path] ? (
-                    <img src={urls[p.path]} alt={`Progress photo ${formatDay(p.takenOn)}`} loading="lazy" className="block w-full" />
-                  ) : (
-                    <div className="aspect-[3/4] animate-pulse bg-white/5" />
-                  )}
-                  <PhotoCaption photo={p} />
-                </button>
+                <ShieldedPhoto
+                  src={urls[p.path]}
+                  alt={`Progress photo ${formatDay(p.takenOn)}`}
+                  shielded={shield}
+                  onTap={comparing ? () => togglePick(p.id) : undefined}
+                  label={
+                    comparing
+                      ? `Select photo from ${formatDay(p.takenOn)}`
+                      : shield
+                        ? `Photo from ${formatDay(p.takenOn)} — press and hold to view`
+                        : `Photo from ${formatDay(p.takenOn)}`
+                  }
+                  className={`${comparing ? "" : "cursor-default"} ${pickIndex >= 0 ? "ring-4 ring-inset ring-emerald-400" : ""}`}
+                  caption={(revealed) => <PhotoCaption photo={p} hideWeight={!revealed} />}
+                />
                 {comparing && pickIndex >= 0 && (
                   <span className="absolute left-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-emerald-400 text-sm font-bold text-zinc-950">
                     {pickIndex + 1}

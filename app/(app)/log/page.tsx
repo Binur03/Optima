@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { EditableMacroForm } from "@/components/EditableMacroForm";
 import { fileToDownscaledJpeg } from "@/lib/image";
 import type { MacroEstimate } from "@/lib/gemini";
+import { PROGRESS_KEY } from "@/lib/useProgress";
 
 type Source = "AI_IMAGE" | "MANUAL" | "TEXT_SEARCH";
 
@@ -101,6 +102,7 @@ export default function LogPage() {
       // Dashboard's macro trackers + Recent Meals refetch on next view.
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["recents"] });
+      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
     } catch {
       setQuickError("Network error. Try again.");
     } finally {

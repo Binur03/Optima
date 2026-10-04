@@ -57,6 +57,13 @@ model User {
   weeklyInsight   String?   @map("weekly_insight")
   weeklyInsightAt DateTime? @map("weekly_insight_at")
 
+  // Gamification. totalXP/level are a cache of SUM(xp_events.amount) — the
+  // ledger is the source of truth, so these can always be recomputed.
+  currentStreak Int @default(0) @map("current_streak")
+  highestStreak Int @default(0) @map("highest_streak")
+  totalXP       Int @default(0) @map("total_xp")
+  level         Int @default(1)
+
   fitbitToken FitbitToken?
   dailyLogs   DailyLog[]
   foodLogs    FoodLog[]
@@ -67,8 +74,39 @@ model User {
   workoutLogs    WorkoutLog[]
   progressPhotos ProgressPhoto[]
   weightLogs     WeightLog[]
+  achievements   Achievement[]
+  xpEvents       XpEvent[]
 
   @@map("users")
+}
+
+// ---------- Gamification ----------
+
+// One row per unlocked badge. The catalog (titles, rules) lives in
+// lib/achievements.ts; `key` is e.g. "streak_7" or "bench_225".
+model Achievement {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String
+  unlockedAt DateTime @default(now()) @map("unlocked_at")
+
+  @@unique([userId, key])
+  @@map("achievements")
+}
+
+// XP ledger. `key` names the reason exactly once ("meal:<foodLogId>",
+// "protein:2026-10-03", "ach:streak_7"), so re-evaluating never double-awards.
+model XpEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  amount    Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, key])
+  @@map("xp_events")
 }
 
 // ---------- Lift tracker ----------

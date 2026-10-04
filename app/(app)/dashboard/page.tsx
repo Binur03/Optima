@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MetricCard } from "@/components/MetricCard";
 import { DeltaBar } from "@/components/DeltaBar";
 import { TdeeBadge } from "@/components/TdeeBadge";
-import { MacroBar } from "@/components/MacroBar";
+import { ActivityRing, RING_COLORS } from "@/components/ActivityRing";
+import { DailyQuests } from "@/components/DailyQuests";
+import { WeeklyCaloriesChart } from "@/components/charts/WeeklyCaloriesChart";
+import { PROGRESS_KEY, useProgress } from "@/lib/useProgress";
 import type { DeltaResult, Goal } from "@/lib/delta";
 
 const GOALS: { key: Goal; label: string }[] = [
@@ -145,6 +149,7 @@ export default function DashboardPage() {
     onSuccess: () => {
       setMeal("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
     },
   });
 
@@ -180,8 +185,10 @@ export default function DashboardPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["recents"] });
+      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
     },
   });
+  const { data: progress } = useProgress();
 
   // Custom goal-offset editor (modal).
   const [editing, setEditing] = useState(false);
@@ -209,44 +216,81 @@ export default function DashboardPage() {
   }, []);
 
   if (isLoading) return <DashboardSkeleton />;
-  if (isError || !data) return <p role="alert">Couldn’t load your dashboard. Pull to retry.</p>;
+  if (isError || !data)
+    return (
+      <p
+        role="alert"
+        className="mt-24 rounded-2xl border border-white/5 bg-neutral-900/80 p-6 text-center text-sm text-neutral-400"
+      >
+        Couldn’t load your dashboard. Pull to retry.
+      </p>
+    );
 
   const reauthNeeded = sync.data?.status === 409;
   const rateLimited = sync.data?.status === 429;
 
   return (
-    <main className="dashboard">
-      <header className="dash-header">
-        <div className="dash-title-row">
-          <h1>Today</h1>
-          {data.streak > 0 && (
-            <span className="streak" title={`${data.streak}-day logging streak`}>
-              🔥 {data.streak}
-            </span>
-          )}
+    <main className="flex flex-col gap-6 pb-4">
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Today</h1>
+          <div className="flex items-center gap-2">
+            {data.streak > 0 && (
+              <span
+                className="rounded-full border border-orange-400/20 bg-orange-400/10 px-3 py-1 text-sm font-semibold tabular-nums text-orange-300"
+                title={`${data.streak}-day logging streak`}
+              >
+                🔥 {data.streak}
+              </span>
+            )}
+            <Link href="/diary" aria-label="Today's meals" className={HEADER_ICON}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M6 4h10a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2z" />
+                <path d="M6 18a2 2 0 0 1 2-2h10M10 8h4" />
+              </svg>
+            </Link>
+            <Link href="/onboarding" aria-label="Setup" className={HEADER_ICON}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5 20a7 7 0 0 1 14 0" />
+              </svg>
+            </Link>
+          </div>
         </div>
-        <TdeeBadge
-          value={data.tdee.value}
-          daysUsed={data.tdee.daysUsed}
-          estimating={data.tdee.estimating}
-          manual={!data.hasWearable}
-        />
-        <div className="goal-toggle" role="group" aria-label="Goal">
-          {GOALS.map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              className={`goal-pill${data.goal === g.key ? " goal-pill-active" : ""}`}
-              aria-pressed={data.goal === g.key}
-              disabled={setGoal.isPending}
-              onClick={() => setGoal.mutate(g.key)}
-            >
-              {g.label}
-            </button>
-          ))}
+        <div>
+          <TdeeBadge
+            value={data.tdee.value}
+            daysUsed={data.tdee.daysUsed}
+            estimating={data.tdee.estimating}
+            manual={!data.hasWearable}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="grid flex-1 grid-cols-3 rounded-xl bg-white/[0.04] p-1 ring-1 ring-inset ring-white/5"
+            role="group"
+            aria-label="Goal"
+          >
+            {GOALS.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                className={`rounded-lg py-1.5 text-sm font-medium transition disabled:opacity-60 ${
+                  data.goal === g.key
+                    ? "bg-white text-zinc-950 shadow-sm"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+                aria-pressed={data.goal === g.key}
+                disabled={setGoal.isPending}
+                onClick={() => setGoal.mutate(g.key)}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            className="goal-edit"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-neutral-400 ring-1 ring-inset ring-white/5 transition hover:text-white"
             aria-label="Edit goal offsets"
             onClick={() => {
               setCutInput(data.cutDelta);
@@ -254,50 +298,80 @@ export default function DashboardPage() {
               setEditing(true);
             }}
           >
-            ⚙️
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" />
+              <circle cx="15" cy="7" r="2" />
+              <circle cx="9" cy="12" r="2" />
+              <circle cx="17" cy="17" r="2" />
+            </svg>
           </button>
         </div>
       </header>
 
       {editing && (
-        <div className="modal-backdrop" onClick={() => setEditing(false)}>
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-sm"
+          onClick={() => setEditing(false)}
+        >
           <div
-            className="modal"
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-neutral-900 p-6 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label="Custom goal offsets"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>Custom goal offsets</h2>
-            <p className="modal-hint">Calories added to your maintenance TDEE for each goal.</p>
-            <label>
-              Cut offset (kcal)
-              <input
-                type="number"
-                value={cutInput}
-                step={50}
-                onChange={(e) => setCutInput(Number(e.target.value))}
-              />
-            </label>
-            <label>
-              Bulk offset (kcal)
-              <input
-                type="number"
-                value={bulkInput}
-                step={50}
-                onChange={(e) => setBulkInput(Number(e.target.value))}
-              />
-            </label>
-            <p className="modal-note">Maintain is always 0. Defaults: Cut −500, Bulk +300.</p>
-            <div className="modal-actions">
-              <button type="button" onClick={() => setEditing(false)} disabled={savePrefs.isPending}>
+            <h2 className="m-0 text-lg font-semibold text-white">Custom goal offsets</h2>
+            <p className="m-0 mt-1 text-sm text-neutral-400">
+              Calories added to your maintenance TDEE for each goal.
+            </p>
+            <div className="mt-5 flex flex-col gap-4">
+              <label className="block">
+                <span className="text-xs font-medium text-neutral-400">Cut offset (kcal)</span>
+                <input
+                  type="number"
+                  value={cutInput}
+                  step={50}
+                  onChange={(e) => setCutInput(Number(e.target.value))}
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 tabular-nums text-white focus:border-emerald-500/50 focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-neutral-400">Bulk offset (kcal)</span>
+                <input
+                  type="number"
+                  value={bulkInput}
+                  step={50}
+                  onChange={(e) => setBulkInput(Number(e.target.value))}
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 tabular-nums text-white focus:border-emerald-500/50 focus:outline-none"
+                />
+              </label>
+            </div>
+            <p className="m-0 mt-3 text-xs text-neutral-500">
+              Maintain is always 0. Defaults: Cut −500, Bulk +300.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={savePrefs.isPending}
+                className="flex-1 rounded-xl py-2.5 text-sm font-medium text-neutral-300 ring-1 ring-inset ring-white/10 transition hover:bg-white/5"
+              >
                 Cancel
               </button>
               <button
                 type="button"
-                className="primary-sm"
                 disabled={savePrefs.isPending}
                 onClick={() => savePrefs.mutate({ cutDelta: cutInput, bulkDelta: bulkInput })}
+                className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:opacity-60"
               >
                 {savePrefs.isPending ? "Saving…" : "Save"}
               </button>
@@ -307,67 +381,62 @@ export default function DashboardPage() {
       )}
 
       {reauthNeeded && (
-        <a className="banner banner-warn" href="/api/fitbit/connect">
-          Fitbit disconnected — tap to reconnect.
+        <a
+          className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300"
+          href="/api/fitbit/connect"
+        >
+          Wearable disconnected — tap to reconnect.
         </a>
       )}
       {rateLimited && (
-        <div className="banner banner-info" role="status">
-          Fitbit is rate-limited; showing last synced numbers.
+        <div
+          className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-300"
+          role="status"
+        >
+          Wearable sync is rate-limited — showing your last synced numbers.
         </div>
       )}
 
-      <DeltaBar delta={data.delta} goal={data.goal} />
-
-      {data.macroTargets && (
-        <section className="macro-trackers" aria-label="Macro progress">
-          <MacroBar label="Protein" consumed={data.macros.protein} target={data.macroTargets.protein} tone="protein" />
-          <MacroBar label="Carbs" consumed={data.macros.carbs} target={data.macroTargets.carbs} tone="carbs" />
-          <MacroBar label="Fat" consumed={data.macros.fat} target={data.macroTargets.fat} tone="fat" />
-        </section>
-      )}
-
-      <section className="metric-grid">
-        {data.hasWearable && (
+      <DeltaBar delta={data.delta} goal={data.goal}>
+        <div
+          className={`grid divide-x divide-white/5 ${data.hasWearable ? "grid-cols-3" : "grid-cols-2"}`}
+        >
+          <MetricCard label="Eaten" value={data.eatenToday} tone="eat" />
           <MetricCard
-            label="Burned Today"
-            value={data.burnedToday}
-            tone="burn"
-            sub={data.steps !== null ? `${data.steps.toLocaleString()} steps` : "no sync yet"}
+            label={data.goalDelta === 0 ? "Target · maintain" : "Target"}
+            value={data.delta.targetIntake}
+            sub={
+              data.delta.targetIntake === null
+                ? "needs baseline"
+                : `${data.goalDelta >= 0 ? "+" : ""}${data.goalDelta} vs maint.`
+            }
           />
-        )}
-        <MetricCard
-          label="Eaten Today"
-          value={data.eatenToday}
-          tone="eat"
-          sub={`P ${Math.round(data.macros.protein)} · C ${Math.round(
-            data.macros.carbs
-          )} · F ${Math.round(data.macros.fat)}`}
-        />
-        <MetricCard
-          label={data.goalDelta === 0 ? "Target (maintain)" : "Target Intake"}
-          value={data.delta.targetIntake}
-          sub={
-            data.delta.targetIntake === null
-              ? "needs Fitbit baseline"
-              : `${data.goalDelta >= 0 ? "+" : ""}${data.goalDelta} vs maintenance`
-          }
-        />
-      </section>
+          {data.hasWearable && (
+            <MetricCard
+              label="Burned"
+              value={data.burnedToday}
+              tone="burn"
+              sub={data.steps !== null ? `${data.steps.toLocaleString()} steps` : "no sync yet"}
+            />
+          )}
+        </div>
+      </DeltaBar>
 
-      <section className="insight-card">
-        <h2>🧠 Weekly AI Review</h2>
-        {weekly?.insight ? (
-          <p className="insight-text">{weekly.insight}</p>
-        ) : (
-          <p className="insight-muted">
-            {weeklyLoading ? "Generating your weekly review…" : weekly?.message ?? "Log a few days to unlock your weekly review."}
-          </p>
-        )}
-      </section>
+      <ActivitySummary
+        eaten={data.eatenToday}
+        target={data.delta.targetIntake}
+        macros={data.macros}
+        macroTargets={data.macroTargets}
+        sets={progress?.today.sets ?? 0}
+        setGoal={progress?.today.setGoal ?? 12}
+      />
 
-      <section className="quick-add">
-        <div className="quick-add-row">
+      {progress && <DailyQuests quests={progress.quests} bonus={progress.questBonus} />}
+
+      <WeeklyCaloriesChart todayCalories={data.eatenToday} target={data.delta.targetIntake} />
+
+      <section className="flex flex-col gap-3" aria-label="Quick add">
+        <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-neutral-900/80 p-1.5 pl-4 shadow-soft transition focus-within:border-emerald-500/40">
           <input
             type="text"
             value={meal}
@@ -375,72 +444,164 @@ export default function DashboardPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && meal.trim().length >= 2) logMeal.mutate(meal.trim());
             }}
-            placeholder="Enter meal, e.g., Big Mac meal or Chipotle chicken bowl…"
+            placeholder="Quick add a meal…"
             maxLength={200}
             disabled={logMeal.isPending}
+            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none disabled:opacity-60"
           />
           <button
             onClick={() => logMeal.mutate(meal.trim())}
             disabled={logMeal.isPending || meal.trim().length < 2}
+            className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:bg-white/10 disabled:text-neutral-500"
           >
-            {logMeal.isPending ? "Logging…" : "Log Meal"}
+            {logMeal.isPending ? "Logging…" : "Log"}
           </button>
         </div>
         {logMeal.isError && (
-          <p role="alert" className="quick-add-error">
+          <p role="alert" className="m-0 text-xs text-rose-400">
             Couldn’t estimate that — try again or use the Log tab.
           </p>
         )}
         {logMeal.data?.log && !logMeal.isPending && (
-          <p className="quick-add-ok" role="status">
+          <p className="m-0 text-xs text-emerald-400" role="status">
             ✓ Added {logMeal.data.log.foodName} · {logMeal.data.log.calories.toLocaleString()} kcal
+          </p>
+        )}
+
+        {recents && recents.length > 0 && (
+          <div>
+            <p className="m-0 mb-2 text-xs font-medium text-neutral-500">Recent · tap to log again</p>
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {recents.map((m, i) => (
+                <button
+                  key={`${m.foodName}-${i}`}
+                  type="button"
+                  disabled={quickLog.isPending}
+                  onClick={() => quickLog.mutate(m)}
+                  className="flex max-w-[180px] shrink-0 flex-col items-start rounded-2xl border border-white/5 bg-neutral-900/80 px-3.5 py-2 text-left transition hover:border-white/15 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <span className="w-full truncate text-sm font-medium text-white">{m.foodName}</span>
+                  <span className="text-[11px] tabular-nums text-neutral-500">
+                    {m.calories.toLocaleString()} kcal
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-gradient-to-br from-emerald-500/[0.08] via-neutral-900/80 to-neutral-900/80 p-5 shadow-soft">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="text-base">
+            ✨
+          </span>
+          <h2 className="m-0 text-sm font-semibold text-white">Weekly AI Review</h2>
+        </div>
+        {weekly?.insight ? (
+          <p className="m-0 mt-2 text-sm leading-relaxed text-neutral-300">{weekly.insight}</p>
+        ) : (
+          <p className="m-0 mt-2 text-sm text-neutral-500">
+            {weeklyLoading ? "Generating your weekly review…" : weekly?.message ?? "Log a few days to unlock your weekly review."}
           </p>
         )}
       </section>
 
-      {recents && recents.length > 0 && (
-        <div className="recents">
-          <span className="recents-label">Recent · one tap to log</span>
-          <div className="recents-row">
-            {recents.map((m, i) => (
-              <button
-                key={`${m.foodName}-${i}`}
-                type="button"
-                className="recent-chip"
-                disabled={quickLog.isPending}
-                onClick={() => quickLog.mutate(m)}
-              >
-                <span className="recent-name">{m.foodName}</span>
-                <span className="recent-cals">{m.calories.toLocaleString()} kcal</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <footer className="dash-footer">
-        {data.lastSyncedAt && (
-          <span className="sync-chip">
-            Synced {new Date(data.lastSyncedAt).toLocaleTimeString()}
-          </span>
+      <footer className="flex items-center justify-between text-xs text-neutral-500">
+        {data.lastSyncedAt ? (
+          <span>Synced {new Date(data.lastSyncedAt).toLocaleTimeString()}</span>
+        ) : (
+          <span />
         )}
-        <button onClick={() => sync.mutate()} disabled={sync.isPending}>
+        <button
+          onClick={() => sync.mutate()}
+          disabled={sync.isPending}
+          className="rounded-lg px-3 py-1.5 text-neutral-400 ring-1 ring-inset ring-white/5 transition hover:text-white disabled:opacity-50"
+        >
           {sync.isPending ? "Syncing…" : "Refresh"}
         </button>
       </footer>
+
     </main>
   );
 }
 
+// Calories / Protein / Workout as stacked Activity Rings with a legend.
+function ActivitySummary({
+  eaten,
+  target,
+  macros,
+  macroTargets,
+  sets,
+  setGoal,
+}: {
+  eaten: number;
+  target: number | null;
+  macros: DashboardData["macros"];
+  macroTargets: DashboardData["macroTargets"];
+  sets: number;
+  setGoal: number;
+}) {
+  const rows = [
+    { label: "Calories", value: eaten, goal: target ?? 0, unit: "kcal", tint: "text-rose-400", ...RING_COLORS.calories },
+    { label: "Protein", value: Math.round(macros.protein), goal: macroTargets?.protein ?? 0, unit: "g", tint: "text-emerald-400", ...RING_COLORS.protein },
+    { label: "Workout", value: sets, goal: setGoal, unit: "sets", tint: "text-sky-400", ...RING_COLORS.workout },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-white/5 bg-neutral-900/80 p-5 shadow-soft" aria-label="Activity rings">
+      <div className="flex items-center gap-5">
+        <ActivityRing rings={rows} size={136} stroke={14} gap={3} />
+        <dl className="m-0 flex min-w-0 flex-1 flex-col gap-2.5">
+          {rows.map((r) => (
+            <div key={r.label} className="min-w-0">
+              <dt className={`text-xs font-semibold ${r.tint}`}>
+                {r.label}
+                {r.goal > 0 && r.value >= r.goal && <span aria-label="goal reached"> ✓</span>}
+              </dt>
+              <dd className="m-0 truncate text-base font-semibold tabular-nums text-white">
+                {r.value.toLocaleString()}
+                <span className="text-sm font-medium text-neutral-500">
+                  {r.goal > 0 ? `/${r.goal.toLocaleString()}` : ""} {r.unit}
+                </span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      {macroTargets && (
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4 text-xs">
+          {(
+            [
+              ["Carbs", macros.carbs, macroTargets.carbs, "bg-amber-400"],
+              ["Fat", macros.fat, macroTargets.fat, "bg-violet-400"],
+            ] as const
+          ).map(([label, value, goal, dot]) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+              <span className="text-neutral-400">{label}</span>
+              <span className="ml-auto font-semibold tabular-nums text-white">
+                {Math.round(value)}
+                <span className="font-normal text-neutral-500">/{goal}g</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const HEADER_ICON =
+  "grid h-9 w-9 place-items-center rounded-full bg-white/[0.04] text-neutral-400 ring-1 ring-inset ring-white/5 transition hover:text-white";
+
 function DashboardSkeleton() {
   return (
-    <div className="dashboard skeleton" aria-busy="true">
-      <div className="skeleton-bar" />
-      <div className="skeleton-grid">
-        <div className="skeleton-card" />
-        <div className="skeleton-card" />
-        <div className="skeleton-card" />
-      </div>
+    <div className="flex animate-pulse flex-col gap-6" aria-busy="true">
+      <div className="h-9 w-28 rounded-lg bg-white/5" />
+      <div className="h-10 rounded-xl bg-white/5" />
+      <div className="h-[330px] rounded-3xl bg-white/5" />
+      <div className="h-28 rounded-2xl bg-white/5" />
     </div>
   );
 }

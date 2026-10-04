@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { LiftSet } from "@/lib/lifts";
+import { PROGRESS_KEY } from "@/lib/useProgress";
 import { formatDay } from "./charts/GlassTooltip";
 
 export interface ExerciseView {
@@ -30,6 +31,7 @@ function patchToday(qc: QueryClient, exerciseId: string, today: LiftSet[]) {
     }
   );
   qc.invalidateQueries({ queryKey: ["lift-insights"] });
+  qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
 }
 
 type Draft = { weight: string; reps: string };

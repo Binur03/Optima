@@ -55,3 +55,5 @@ alter table public.exercises      enable row level security;
 alter table public.workout_logs   enable row level security;
 alter table public.progress_photos enable row level security;
 alter table public.weight_logs    enable row level security;
+alter table public.achievements   enable row level security;
+alter table public.xp_events      enable row level security;

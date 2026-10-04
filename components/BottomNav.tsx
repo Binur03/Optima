@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { ActionSheet } from "./ActionSheet";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { SpeedDial } from "./SpeedDial";
 
 const ICONS: Record<string, JSX.Element> = {
   today: <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" />,
@@ -30,7 +31,9 @@ const RIGHT: Tab[] = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [dialOpen, setDialOpen] = useState(false);
+  // Any navigation (a bubble, a tab, the back button) closes the dial.
+  useEffect(() => setDialOpen(false), [pathname]);
 
   const tab = (t: Tab) => {
     const active = pathname?.startsWith(t.href);
@@ -63,26 +66,39 @@ export function BottomNav() {
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 mx-auto grid h-16 max-w-[480px] grid-cols-5 border-t border-white/5 bg-zinc-950/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+        className={`fixed inset-x-0 bottom-0 mx-auto grid h-16 max-w-[480px] grid-cols-5 border-t border-white/5 bg-zinc-950/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl ${
+          dialOpen ? "z-[60]" : "z-40"
+        }`}
         aria-label="Primary"
       >
         {LEFT.map(tab)}
         <div className="flex items-start justify-center">
           <button
             type="button"
-            onClick={() => setSheetOpen(true)}
-            aria-label="Add food, lift, or progress photo"
-            aria-haspopup="dialog"
+            onClick={() => setDialOpen((o) => !o)}
+            aria-label={dialOpen ? "Close add menu" : "Add food, lift, or progress photo"}
+            aria-haspopup="menu"
+            aria-expanded={dialOpen}
             className="-mt-5 grid h-14 w-14 place-items-center rounded-full bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-500/30 ring-4 ring-zinc-950 transition hover:bg-emerald-400 active:scale-95"
           >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden>
+            <motion.svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.4}
+              strokeLinecap="round"
+              aria-hidden
+              animate={{ rotate: dialOpen ? 45 : 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            >
               <path d="M12 5v14M5 12h14" />
-            </svg>
+            </motion.svg>
           </button>
         </div>
         {RIGHT.map(tab)}
       </nav>
-      <ActionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <SpeedDial open={dialOpen} onClose={() => setDialOpen(false)} />
     </>
   );
 }

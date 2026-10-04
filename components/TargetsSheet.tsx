@@ -174,7 +174,7 @@ export function TargetsSheet({ open, snapshot: s, busy, error, onClose, onSave }
               [
                 ["Protein", protein, setProtein, auto?.protein, "text-emerald-400"],
                 ["Carbs", carbs, setCarbs, auto?.carbs, "text-amber-400"],
-                ["Fat", fat, setFat, auto?.fat, "text-violet-400"],
+                ["Fat", fat, setFat, auto?.fat, "text-rose-400"],
               ] as const
             ).map(([label, value, set, autoValue, tint]) => (
               <label key={label} className="block rounded-2xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-inset ring-white/5 focus-within:ring-emerald-500/40">

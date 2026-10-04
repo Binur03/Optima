@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
       fatG: true,
       source: true,
       aiEstimated: true,
+      createdAt: true, // groups meals into Breakfast / Lunch / Dinner client-side
     },
   });
 
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
       fatG: Number(m.fatG),
       source: m.source,
       aiEstimated: m.aiEstimated,
+      createdAt: m.createdAt.toISOString(),
     })),
   });
 }

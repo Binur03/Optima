@@ -5,6 +5,8 @@ import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-q
 import type { LiftSet } from "@/lib/lifts";
 import { PROGRESS_KEY } from "@/lib/useProgress";
 import { formatDay } from "./charts/GlassTooltip";
+import { StepperField } from "./StepperField";
+import { SwipeToCopy } from "./SwipeToCopy";
 
 export interface ExerciseView {
   id: string;
@@ -141,22 +143,31 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
 
           <div className="flex flex-col gap-2">
             {done.map((s, i) => (
-              <div key={`done-${i}`} className="grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-2 rounded-2xl bg-emerald-500/[0.07] px-1 py-1">
-                <span className="text-center text-sm font-semibold text-emerald-400">{i + 1}</span>
-                <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.weight}</span>
-                <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.reps}</span>
-                <button
-                  type="button"
-                  onClick={() => removeSet.mutate(i)}
-                  disabled={removeSet.isPending}
-                  aria-label={`Remove set ${i + 1}`}
-                  className="grid h-10 w-10 place-items-center rounded-xl text-emerald-400 transition hover:bg-rose-500/15 hover:text-rose-300 disabled:opacity-50"
-                >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="m5 12.5 4.5 4.5L19 7.5" />
-                  </svg>
-                </button>
-              </div>
+              <SwipeToCopy
+                key={`done-${i}`}
+                onCopy={() => addSet.mutate(s)}
+                label="Same again"
+                a11yLabel={`Log another ${s.weight} × ${s.reps}`}
+                disabled={addSet.isPending}
+                className="rounded-2xl bg-[#16221e]"
+              >
+                <div className="grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-2 px-1 py-1">
+                  <span className="text-center text-sm font-semibold text-emerald-400">{i + 1}</span>
+                  <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.weight}</span>
+                  <span className="py-2 text-center text-base font-semibold tabular-nums text-white">{s.reps}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSet.mutate(i)}
+                    disabled={removeSet.isPending}
+                    aria-label={`Remove set ${i + 1}`}
+                    className="grid h-10 w-10 place-items-center rounded-xl text-emerald-400 transition hover:bg-rose-500/15 hover:text-rose-300 disabled:opacity-50"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="m5 12.5 4.5 4.5L19 7.5" />
+                    </svg>
+                  </button>
+                </div>
+              </SwipeToCopy>
             ))}
 
             {Array.from({ length: pending }, (_, j) => {
@@ -164,25 +175,35 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
               const g = ghostFor(i);
               const d = drafts[i] ?? { weight: "", reps: "" };
               const ready = resolve(i) !== null;
-              const set = (patch: Partial<Draft>) => setDrafts((prev) => ({ ...prev, [i]: { ...d, ...patch } }));
+              const set = (patch: Partial<Draft>) => setDrafts((prev) => ({ ...prev, [i]: { ...(prev[i] ?? d), ...patch } }));
               return (
-                <div key={`pending-${i}`} className="grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-2 px-1">
+                <SwipeToCopy
+                  key={`pending-${i}`}
+                  onCopy={() => confirm(i)}
+                  label="Log set"
+                  a11yLabel={`Log set ${i + 1}`}
+                  disabled={!ready || addSet.isPending}
+                  className="rounded-2xl bg-neutral-900"
+                >
+                <div className="grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-2 px-1">
                   <span className="text-center text-sm font-semibold text-neutral-500">{i + 1}</span>
-                  <input
+                  <StepperField
+                    label={`Set ${i + 1} weight`}
                     inputMode="decimal"
-                    aria-label={`Set ${i + 1} weight`}
                     value={d.weight}
-                    placeholder={g ? String(g.weight) : "—"}
-                    onChange={(e) => set({ weight: e.target.value.replace(/[^\d.]/g, "") })}
-                    className={GHOST_INPUT}
+                    placeholder={g ? String(g.weight) : undefined}
+                    onChange={(v) => set({ weight: v })}
+                    step={(w) => (w < 50 ? 2.5 : 5)}
+                    max={2000}
                   />
-                  <input
-                    inputMode="numeric"
-                    aria-label={`Set ${i + 1} reps`}
+                  <StepperField
+                    label={`Set ${i + 1} reps`}
                     value={d.reps}
-                    placeholder={g ? String(g.reps) : "—"}
-                    onChange={(e) => set({ reps: e.target.value.replace(/\D/g, "") })}
-                    className={GHOST_INPUT}
+                    placeholder={g ? String(g.reps) : undefined}
+                    onChange={(v) => set({ reps: v })}
+                    step={1}
+                    min={1}
+                    max={100}
                   />
                   <button
                     type="button"
@@ -196,9 +217,11 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
                     </svg>
                   </button>
                 </div>
+                </SwipeToCopy>
               );
             })}
           </div>
+          <p className="m-0 mt-2 text-center text-[11px] text-neutral-600">Tap a number to adjust · swipe a set right to log it</p>
 
           <button
             type="button"
@@ -217,6 +240,3 @@ export function ExerciseCard({ exercise, defaultOpen = false }: { exercise: Exer
     </div>
   );
 }
-
-const GHOST_INPUT =
-  "w-full rounded-xl border border-white/5 bg-zinc-950 py-2.5 text-center text-base font-semibold tabular-nums text-white placeholder:font-medium placeholder:text-neutral-600 focus:border-emerald-500/50 focus:outline-none";

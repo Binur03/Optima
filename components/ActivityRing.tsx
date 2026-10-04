@@ -126,8 +126,10 @@ function RingTrack({
   );
 }
 
+// Semantic macro hues — the same colours label P / C / F everywhere in the app.
 export const RING_COLORS = {
-  calories: { from: "#fb7185", to: "#f43f5e" },
-  protein: { from: "#6ee7b7", to: "#10b981" },
-  workout: { from: "#7dd3fc", to: "#0ea5e9" },
+  protein: { from: "#6ee7b7", to: "#10b981" }, // emerald
+  carbs: { from: "#fcd34d", to: "#f59e0b" }, // amber
+  fat: { from: "#fda4af", to: "#f43f5e" }, // rose
+  workout: { from: "#7dd3fc", to: "#0ea5e9" }, // sky
 } as const;

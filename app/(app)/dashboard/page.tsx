@@ -11,6 +11,8 @@ import { DailyQuests } from "@/components/DailyQuests";
 import { WeeklyCaloriesChart } from "@/components/charts/WeeklyCaloriesChart";
 import { TargetsSheet, type TargetsChange } from "@/components/TargetsSheet";
 import { PROGRESS_KEY, useProgress } from "@/lib/useProgress";
+import { MealGroups } from "@/components/MealGroups";
+import { refreshFood, useCopyMeal, useMeals } from "@/lib/useMeals";
 import type { DeltaResult, Goal } from "@/lib/delta";
 
 const GOALS: { key: Goal; label: string }[] = [
@@ -151,13 +153,15 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) throw new Error("log_failed");
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? "log_failed");
+      }
       return res.json() as Promise<{ log: { foodName: string; calories: number } }>;
     },
     onSuccess: () => {
       setMeal("");
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
+      refreshFood(qc);
     },
   });
 
@@ -190,11 +194,7 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("quicklog_failed");
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["recents"] });
-      qc.invalidateQueries({ queryKey: PROGRESS_KEY }, { cancelRefetch: false });
-    },
+    onSuccess: () => refreshFood(qc),
   });
   const { data: progress } = useProgress();
 
@@ -241,9 +241,12 @@ export default function DashboardPage() {
   return (
     <main className="flex flex-col gap-6 pb-4">
       <header className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Today</h1>
-          <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Today</h1>
+            <ContextPrompt data={data} />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 pt-1">
             {data.streak > 0 && (
               <span
                 className="rounded-full border border-orange-400/20 bg-orange-400/10 px-3 py-1 text-sm font-semibold tabular-nums text-orange-300"
@@ -388,8 +391,6 @@ export default function DashboardPage() {
       </DeltaBar>
 
       <ActivitySummary
-        eaten={data.eatenToday}
-        target={data.delta.targetIntake}
         macros={data.macros}
         macroTargets={data.macroTargets}
         sets={progress?.today.sets ?? 0}
@@ -397,8 +398,6 @@ export default function DashboardPage() {
       />
 
       {progress && <DailyQuests quests={progress.quests} bonus={progress.questBonus} />}
-
-      <WeeklyCaloriesChart todayCalories={data.eatenToday} target={data.delta.targetIntake} />
 
       <section className="flex flex-col gap-3" aria-label="Quick add">
         <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-neutral-900/80 p-1.5 pl-4 shadow-soft transition focus-within:border-emerald-500/40">
@@ -424,7 +423,9 @@ export default function DashboardPage() {
         </div>
         {logMeal.isError && (
           <p role="alert" className="m-0 text-xs text-rose-400">
-            Couldn’t estimate that — try again or use the Log tab.
+            {logMeal.error?.message === "ai_busy"
+              ? "The AI is busy right now — give it a few seconds and try again. Nothing was saved."
+              : "Couldn’t estimate that — try again or use the Log tab."}
           </p>
         )}
         {logMeal.data?.log && !logMeal.isPending && (
@@ -455,6 +456,10 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      <TodayMeals />
+
+      <WeeklyCaloriesChart todayCalories={data.eatenToday} target={data.delta.targetIntake} />
 
       <section className="rounded-2xl border border-white/5 bg-gradient-to-br from-emerald-500/[0.08] via-neutral-900/80 to-neutral-900/80 p-5 shadow-soft">
         <div className="flex items-center gap-2">
@@ -491,30 +496,60 @@ export default function DashboardPage() {
   );
 }
 
-// Calories / Protein / Workout as stacked Activity Rings with a legend.
+// Time-of-day prompt under the title, e.g. "Dinner · 620 kcal remaining" from 5 PM.
+function ContextPrompt({ data }: { data: DashboardData }) {
+  const [hour, setHour] = useState(() => new Date().getHours());
+  useEffect(() => {
+    const t = setInterval(() => setHour(new Date().getHours()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const { remaining, targetIntake } = data.delta;
+  let text: string;
+  if (targetIntake === null || remaining === null) {
+    text = "Log a meal to start your day";
+  } else if (remaining < 0) {
+    text = `${Math.abs(remaining).toLocaleString()} kcal over today${hour >= 17 && hour < 22 ? " — keep dinner light" : ""}`;
+  } else {
+    const left = `${remaining.toLocaleString()} kcal remaining`;
+    if (hour < 5) text = `Late night · ${left}`;
+    else if (hour < 11) text = data.eatenToday === 0 ? `Breakfast · ${targetIntake.toLocaleString()} kcal to work with today` : `Breakfast · ${left}`;
+    else if (hour < 17) text = `Lunch · ${left}`;
+    else if (hour < 22) text = `Dinner · ${left}`;
+    else text = `Winding down · ${left}`;
+  }
+  const proteinLeft = data.macroTargets ? Math.round(data.macroTargets.protein - data.macros.protein) : 0;
+
+  return (
+    <p className="m-0 mt-1 text-sm font-medium text-neutral-400" aria-live="polite">
+      {text}
+      {hour >= 11 && proteinLeft >= 20 && <span className="block text-emerald-400/90">{proteinLeft} g protein to go</span>}
+    </p>
+  );
+}
+
+// Protein / Carbs / Fat as stacked rings in their semantic colours, plus a
+// compact workout ring. Calories live in the hero ring above.
 function ActivitySummary({
-  eaten,
-  target,
   macros,
   macroTargets,
   sets,
   setGoal,
 }: {
-  eaten: number;
-  target: number | null;
   macros: DashboardData["macros"];
   macroTargets: DashboardData["macroTargets"];
   sets: number;
   setGoal: number;
 }) {
   const rows = [
-    { label: "Calories", value: eaten, goal: target ?? 0, unit: "kcal", tint: "text-rose-400", ...RING_COLORS.calories },
-    { label: "Protein", value: Math.round(macros.protein), goal: macroTargets?.protein ?? 0, unit: "g", tint: "text-emerald-400", ...RING_COLORS.protein },
-    { label: "Workout", value: sets, goal: setGoal, unit: "sets", tint: "text-sky-400", ...RING_COLORS.workout },
+    { label: "Protein", value: Math.round(macros.protein), goal: macroTargets?.protein ?? 0, tint: "text-emerald-400", ...RING_COLORS.protein },
+    { label: "Carbs", value: Math.round(macros.carbs), goal: macroTargets?.carbs ?? 0, tint: "text-amber-400", ...RING_COLORS.carbs },
+    { label: "Fat", value: Math.round(macros.fat), goal: macroTargets?.fat ?? 0, tint: "text-rose-400", ...RING_COLORS.fat },
   ];
+  const workoutDone = sets >= setGoal;
 
   return (
-    <section className="rounded-3xl border border-white/5 bg-neutral-900/80 p-5 shadow-soft" aria-label="Activity rings">
+    <section className="rounded-3xl border border-white/5 bg-neutral-900/80 p-5 shadow-soft" aria-label="Macros and workout">
       <div className="flex items-center gap-5">
         <ActivityRing rings={rows} size={136} stroke={14} gap={3} />
         <dl className="m-0 flex min-w-0 flex-1 flex-col gap-2.5">
@@ -526,33 +561,45 @@ function ActivitySummary({
               </dt>
               <dd className="m-0 truncate text-base font-semibold tabular-nums text-white">
                 {r.value.toLocaleString()}
-                <span className="text-sm font-medium text-neutral-500">
-                  {r.goal > 0 ? `/${r.goal.toLocaleString()}` : ""} {r.unit}
-                </span>
+                <span className="text-sm font-medium text-neutral-500">{r.goal > 0 ? `/${r.goal.toLocaleString()}` : ""} g</span>
               </dd>
             </div>
           ))}
         </dl>
       </div>
-      {macroTargets && (
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4 text-xs">
-          {(
-            [
-              ["Carbs", macros.carbs, macroTargets.carbs, "bg-amber-400"],
-              ["Fat", macros.fat, macroTargets.fat, "bg-violet-400"],
-            ] as const
-          ).map(([label, value, goal, dot]) => (
-            <div key={label} className="flex items-center gap-2">
-              <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
-              <span className="text-neutral-400">{label}</span>
-              <span className="ml-auto font-semibold tabular-nums text-white">
-                {Math.round(value)}
-                <span className="font-normal text-neutral-500">/{goal}g</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <Link
+        href="/train"
+        className="mt-4 flex items-center gap-3 border-t border-white/5 pt-4 transition hover:opacity-90"
+      >
+        <ActivityRing rings={[{ label: "Workout", value: sets, goal: setGoal, ...RING_COLORS.workout }]} size={40} stroke={6} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-semibold text-sky-400">Workout{workoutDone && <span aria-label="goal reached"> ✓</span>}</span>
+          <span className="block text-sm font-semibold tabular-nums text-white">
+            {sets}
+            <span className="font-medium text-neutral-500">/{setGoal} sets</span>
+          </span>
+        </span>
+        <span className="text-xs font-semibold text-neutral-500">Train ›</span>
+      </Link>
+    </section>
+  );
+}
+
+// Today's meals as collapsible Breakfast / Lunch / Dinner cards.
+function TodayMeals() {
+  const { data: meals } = useMeals(null);
+  const copy = useCopyMeal();
+  if (!meals || meals.length === 0) return null;
+  return (
+    <section aria-label="Today's meals" className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="m-0 text-sm font-semibold text-white">Today’s meals</h2>
+        <Link href="/diary" className="text-xs font-semibold text-emerald-400">
+          Diary ›
+        </Link>
+      </div>
+      <MealGroups meals={meals} copyLabel="Log again" onCopy={(m) => copy.mutate(m)} copying={copy.isPending} />
+      {copy.isError && <p role="alert" className="m-0 text-xs text-rose-400">Couldn’t log that again — try once more.</p>}
     </section>
   );
 }

@@ -1,22 +1,27 @@
-/* MacroDelta — mobile-first global styles.
-   Dimensions on hero elements are LOCKED (min-heights) so numbers swapping from
-   skeleton → data causes zero layout shift. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optima — mobile-first global styles.
+   Today / Log / Setup are styled with Tailwind utilities. The classes below
+   still style Diary, Login, the review form and modals; their tokens follow the
+   same neutral zinc palette so every screen matches. */
 
 :root {
-  --bg: #0b0f14;
-  --surface: #131a22;
-  --surface-2: #1b2530;
-  --border: #26313d;
-  --text: #e8eef4;
-  --muted: #8a99a8;
-  --burn: #ff7a45;
-  --eat: #4cc38a;
-  --accent: #4c8dff;
-  --warn: #f5c451;
-  --over: #ff5470;
-  --under: #4c8dff;
-  --on: #4cc38a;
-  --radius: 14px;
+  --bg: #09090b;         /* zinc-950 */
+  --surface: #18181b;    /* zinc-900 */
+  --surface-2: #27272a;  /* zinc-800 */
+  --border: rgba(255, 255, 255, 0.07);
+  --text: #fafafa;
+  --muted: #a3a3a3;      /* neutral-400 */
+  --burn: #fb923c;       /* orange-400 */
+  --eat: #10b981;        /* emerald-500 */
+  --accent: #10b981;
+  --warn: #f59e0b;       /* amber-500 */
+  --over: #f43f5e;       /* rose-500 */
+  --under: #38bdf8;      /* sky-400 */
+  --on: #10b981;
+  --radius: 16px;
   --nav-h: 64px;
 }
 

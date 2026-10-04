@@ -85,28 +85,49 @@ export default function OnboardingPage() {
   const target = tdee === null ? null : tdee + goalDelta;
 
   return (
-    <main className="onboarding">
-      <h1>Set up Optima</h1>
+    <main className="flex flex-col gap-6 pb-4">
+      <header>
+        <h1 className="m-0 text-2xl font-semibold tracking-tight text-white">Set up Optima</h1>
+        <p className="m-0 mt-1 text-sm text-neutral-400">Pick a goal and we’ll handle the math.</p>
+      </header>
 
-      <section className="ob-step">
-        <h2>1 · Your goal</h2>
-        <div className="goal-grid">
-          {GOALS.map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              className={`goal-card${goal === g.key ? " goal-selected" : ""}`}
-              onClick={() => pickGoal(g.key)}
-              aria-pressed={goal === g.key}
-            >
-              <span className="goal-title">{g.title}</span>
-              <span className="goal-blurb">{g.blurb}</span>
-            </button>
-          ))}
+      <section className={CARD}>
+        <StepHeading step={1} title="Your goal" />
+        <div
+          className="mt-4 grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.04] p-1 ring-1 ring-inset ring-white/5"
+          role="group"
+          aria-label="Goal"
+        >
+          {GOALS.map((g) => {
+            const selected = goal === g.key;
+            return (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => pickGoal(g.key)}
+                aria-pressed={selected}
+                className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-3 text-center transition ${
+                  selected ? "bg-white shadow-sm" : "hover:bg-white/5"
+                }`}
+              >
+                <span className={`text-sm font-semibold ${selected ? "text-zinc-950" : "text-neutral-200"}`}>
+                  {g.title}
+                </span>
+                <span className={`text-[11px] leading-tight ${selected ? "text-zinc-600" : "text-neutral-500"}`}>
+                  {g.blurb}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <label className="delta-tuner">
-          Daily target vs. maintenance:{" "}
-          <strong>{goalDelta >= 0 ? `+${goalDelta}` : goalDelta} kcal</strong>
+
+        <label className="mt-5 block">
+          <span className="flex items-baseline justify-between">
+            <span className="text-xs font-medium text-neutral-400">Daily target vs. maintenance</span>
+            <span className="text-sm font-semibold tabular-nums text-white">
+              {goalDelta >= 0 ? `+${goalDelta}` : goalDelta} kcal
+            </span>
+          </span>
           <input
             type="range"
             min={-1000}
@@ -114,85 +135,98 @@ export default function OnboardingPage() {
             step={50}
             value={goalDelta}
             onChange={(e) => setGoalDelta(Number(e.target.value))}
+            className="mt-3 w-full accent-emerald-500"
           />
         </label>
       </section>
 
-      <section className="ob-step">
-        <h2>2 · Do you have a fitness wearable?</h2>
-        <p className="ob-hint">A Fitbit / Google-connected device auto-tracks your daily burn.</p>
-        <div className="wearable-choice">
+      <section className={CARD}>
+        <StepHeading step={2} title="Do you have a fitness wearable?" />
+        <p className="m-0 mt-1 text-sm text-neutral-400">
+          A Fitbit / Google-connected device auto-tracks your daily burn.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
-            className={`choice-card${hasWearable === true ? " choice-selected" : ""}`}
             onClick={() => setHasWearable(true)}
             aria-pressed={hasWearable === true}
+            className={`${CHOICE} ${hasWearable === true ? CHOICE_ON : CHOICE_OFF}`}
           >
-            ⌚ Yes, I have one
+            <span className="text-2xl" aria-hidden>⌚</span>
+            <span className="text-sm font-semibold text-white">Yes, I have one</span>
+            <span className="text-[11px] text-neutral-500">Auto-sync my burn</span>
           </button>
           <button
             type="button"
-            className={`choice-card${hasWearable === false ? " choice-selected" : ""}`}
             onClick={() => setHasWearable(false)}
             aria-pressed={hasWearable === false}
+            className={`${CHOICE} ${hasWearable === false ? CHOICE_ON : CHOICE_OFF}`}
           >
-            ✍️ No, track manually
+            <span className="text-2xl" aria-hidden>✍️</span>
+            <span className="text-sm font-semibold text-white">No, track manually</span>
+            <span className="text-[11px] text-neutral-500">Estimate from my stats</span>
           </button>
         </div>
       </section>
 
       {hasWearable === true && (
-        <section className="ob-step">
-          <h2>3 · Connect your wearable</h2>
-          <p className="ob-hint">We’ll pull your daily burn to build a 7-day maintenance baseline.</p>
-          <button
-            className="primary fitbit-btn"
-            disabled={busy}
-            onClick={() => save({ hasWearable: true }, "/api/fitbit/connect")}
-          >
-            {busy ? "Saving…" : "Save & connect Google Health"}
-          </button>
-          <button
-            className="ghost"
-            disabled={busy}
-            onClick={() => save({ hasWearable: true }, "/dashboard")}
-          >
-            Skip for now
-          </button>
-          {error && <p role="alert" className="ob-error">{error}</p>}
+        <section className={CARD}>
+          <StepHeading step={3} title="Connect your wearable" />
+          <p className="m-0 mt-1 text-sm text-neutral-400">
+            We’ll pull your daily burn to build a 7-day maintenance baseline.
+          </p>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              disabled={busy}
+              onClick={() => save({ hasWearable: true }, "/api/fitbit/connect")}
+              className={PRIMARY}
+            >
+              {busy ? "Saving…" : "Save & connect Google Health"}
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => save({ hasWearable: true }, "/dashboard")}
+              className="w-full rounded-xl bg-transparent py-2.5 text-sm font-medium text-neutral-400 transition hover:text-white disabled:opacity-50"
+            >
+              Skip for now
+            </button>
+          </div>
+          {error && <p role="alert" className={ERROR_MSG}>{error}</p>}
         </section>
       )}
 
       {hasWearable === false && (
-        <section className="ob-step">
-          <h2>3 · Your details</h2>
-          <p className="ob-hint">We’ll estimate your maintenance calories (Mifflin-St Jeor).</p>
+        <section className={CARD}>
+          <StepHeading step={3} title="Your details" />
+          <p className="m-0 mt-1 text-sm text-neutral-400">
+            We’ll estimate your maintenance calories (Mifflin-St Jeor).
+          </p>
 
-          <div className="manual-grid">
-            <label>
-              Age
-              <input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} />
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className={LABEL}>Age</span>
+              <input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} className={FIELD} />
             </label>
-            <label>
-              Sex
-              <select value={sex} onChange={(e) => setSex(e.target.value as BiologicalSex)}>
+            <label className="block">
+              <span className={LABEL}>Sex</span>
+              <select value={sex} onChange={(e) => setSex(e.target.value as BiologicalSex)} className={FIELD}>
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
                 <option value="OTHER">Other</option>
               </select>
             </label>
-            <label>
-              Height (cm)
-              <input type="number" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+            <label className="block">
+              <span className={LABEL}>Height (cm)</span>
+              <input type="number" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} className={FIELD} />
             </label>
-            <label>
-              Weight (kg)
-              <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+            <label className="block">
+              <span className={LABEL}>Weight (kg)</span>
+              <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className={FIELD} />
             </label>
           </div>
-          <label>
-            Activity level
-            <select value={activity} onChange={(e) => setActivity(e.target.value as ActivityLevel)}>
+          <label className="mt-3 block">
+            <span className={LABEL}>Activity level</span>
+            <select value={activity} onChange={(e) => setActivity(e.target.value as ActivityLevel)} className={FIELD}>
               {ACTIVITIES.map((a) => (
                 <option key={a} value={a}>
                   {ACTIVITY_LABELS[a]}
@@ -201,33 +235,44 @@ export default function OnboardingPage() {
             </select>
           </label>
 
-          <button className="ghost" type="button" onClick={recalc} disabled={busy}>
+          <button
+            type="button"
+            onClick={recalc}
+            disabled={busy}
+            className="mt-4 w-full rounded-xl bg-transparent py-2.5 text-sm font-medium text-white ring-1 ring-inset ring-white/10 transition hover:bg-white/5 disabled:opacity-50"
+          >
             Calculate maintenance
           </button>
 
           {tdee !== null && (
-            <div className="tdee-result">
-              <label>
-                Calculated maintenance calories (editable)
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={tdee}
-                  onChange={(e) => setTdee(Number(e.target.value))}
-                />
+            <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+              <label className="block">
+                <span className="text-xs font-medium text-emerald-300/80">
+                  Maintenance calories · tap to edit
+                </span>
+                <span className="mt-1 flex items-baseline gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={tdee}
+                    onChange={(e) => setTdee(Number(e.target.value))}
+                    className="w-full min-w-0 bg-transparent text-4xl font-semibold tabular-nums tracking-tight text-white focus:outline-none"
+                  />
+                  <span className="shrink-0 text-sm text-neutral-400">kcal/day</span>
+                </span>
               </label>
               {target !== null && (
-                <p className="ob-hint">
-                  Daily target for {goal.toLowerCase()}: <strong>{target.toLocaleString()} kcal</strong>
+                <p className="m-0 mt-2 text-sm text-neutral-400">
+                  Daily target for {goal.toLowerCase()}:{" "}
+                  <span className="font-semibold tabular-nums text-white">{target.toLocaleString()} kcal</span>
                 </p>
               )}
             </div>
           )}
 
-          {error && <p role="alert" className="ob-error">{error}</p>}
+          {error && <p role="alert" className={ERROR_MSG}>{error}</p>}
 
           <button
-            className="primary"
             disabled={busy || tdee === null}
             onClick={() =>
               save(
@@ -243,6 +288,7 @@ export default function OnboardingPage() {
                 "/dashboard"
               )
             }
+            className={`mt-5 ${PRIMARY}`}
           >
             {busy ? "Saving…" : "Save & finish"}
           </button>
@@ -251,3 +297,24 @@ export default function OnboardingPage() {
     </main>
   );
 }
+
+function StepHeading({ step, title }: { step: number; title: string }) {
+  return (
+    <div>
+      <p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-emerald-400">Step {step}</p>
+      <h2 className="m-0 mt-1 text-base font-semibold text-white">{title}</h2>
+    </div>
+  );
+}
+
+const CARD = "rounded-2xl border border-white/5 bg-neutral-900/80 p-5 shadow-soft";
+const LABEL = "text-xs font-medium text-neutral-400";
+const FIELD =
+  "mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm tabular-nums text-white focus:border-emerald-500/50 focus:outline-none";
+const PRIMARY =
+  "w-full rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:bg-white/10 disabled:text-neutral-500";
+const CHOICE = "flex flex-col items-start gap-1 rounded-2xl border p-4 text-left transition";
+const CHOICE_ON = "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30";
+const CHOICE_OFF = "border-white/5 bg-white/[0.02] hover:border-white/15";
+const ERROR_MSG =
+  "m-0 mt-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300";

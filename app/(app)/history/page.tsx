@@ -8,6 +8,7 @@ import { formatDay } from "@/components/charts/GlassTooltip";
 import { CompareMode, PhotoCaption, type ProgressPhotoView as Photo } from "@/components/CompareMode";
 import { MonthCalendar, localKey } from "@/components/MonthCalendar";
 import { ShieldedPhoto } from "@/components/ShieldedPhoto";
+import { ProgressSwitch } from "@/components/ProgressSwitch";
 import { useUnits } from "@/lib/useUnits";
 import { displayToLb, weightUnit } from "@/lib/units";
 
@@ -110,6 +111,7 @@ export default function HistoryPage() {
 
   return (
     <main className="flex flex-col gap-5 pb-4">
+      <ProgressSwitch active="photos" />
       <header className="flex items-end justify-between gap-3">
         <div>
           <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">History</h1>

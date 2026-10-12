@@ -3,11 +3,12 @@
 import { useUnits } from "@/lib/useUnits";
 
 // lb ⇄ kg switch. Changes every screen at once and is saved to the account.
-export function UnitToggle({ full = false }: { full?: boolean }) {
+// `labels` renames the two sides for a screen's own unit (e.g. oz / ml for water).
+export function UnitToggle({ full = false, labels }: { full?: boolean; labels?: [string, string] }) {
   const { units, setUnits } = useUnits();
   const options = [
-    { key: "imperial" as const, label: full ? "ft · in · lb" : "lb" },
-    { key: "metric" as const, label: full ? "cm · kg" : "kg" },
+    { key: "imperial" as const, label: labels?.[0] ?? (full ? "ft · in · lb" : "lb") },
+    { key: "metric" as const, label: labels?.[1] ?? (full ? "cm · kg" : "kg") },
   ];
   return (
     <div

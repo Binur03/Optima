@@ -40,5 +40,6 @@ export const config = {
     "/train/:path*",
     "/progress/:path*",
     "/insights/:path*",
+    "/supplements/:path*",
   ],
 };

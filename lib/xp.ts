@@ -8,6 +8,8 @@ export const XP = {
   lift: 40, // completed a lift (3+ sets of one exercise)
   workout: 60, // closed the workout ring
   quests: 25, // all three daily quests cleared
+  water: 20, // hit the daily water goal
+  supplements: 10, // took every supplement on the list that day
 } as const;
 
 export const LIFT_COMPLETE_SETS = 3;

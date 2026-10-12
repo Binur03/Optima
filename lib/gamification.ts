@@ -225,6 +225,24 @@ export async function syncProgress(userId: string) {
     candidates.push({ key: `calories:${yesterdayKey}`, amount: XP.calories, label: "On-target day" });
   }
 
+  // Hydration + supplements, for today and yesterday.
+  const [waterByDay, suppCount, suppLogs, waterGoal] = await Promise.all([
+    prisma.waterLog.groupBy({ by: ["logDate"], where: { userId, logDate: { gte: yesterday } }, _sum: { amountMl: true } }),
+    prisma.supplement.count({ where: { userId } }),
+    prisma.supplementLog.groupBy({ by: ["logDate"], where: { userId, logDate: { gte: yesterday } }, _count: { _all: true } }),
+    prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { waterGoalMl: true } }),
+  ]);
+  for (const w of waterByDay) {
+    if ((w._sum.amountMl ?? 0) >= waterGoal.waterGoalMl) {
+      candidates.push({ key: `water:${isoDay(w.logDate)}`, amount: XP.water, label: "Water goal hit" });
+    }
+  }
+  for (const s of suppLogs) {
+    if (suppCount > 0 && s._count._all >= suppCount) {
+      candidates.push({ key: `supps:${isoDay(s.logDate)}`, amount: XP.supplements, label: "All supplements taken" });
+    }
+  }
+
   const awarded = await grant(userId, candidates);
 
   // Achievements — evaluated after the grant so today's protein counts.

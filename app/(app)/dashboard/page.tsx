@@ -12,6 +12,10 @@ import { WeeklyCaloriesChart } from "@/components/charts/WeeklyCaloriesChart";
 import { TargetsSheet, type TargetsChange } from "@/components/TargetsSheet";
 import { PROGRESS_KEY, useProgress } from "@/lib/useProgress";
 import type { ProgressState } from "@/lib/gamification";
+import { useSupps } from "@/lib/useSupps";
+import { useUnits } from "@/lib/useUnits";
+import { formatWater, waterNumber } from "@/lib/units";
+import { currentTime } from "@/lib/supplements";
 import { MealGroups } from "@/components/MealGroups";
 import { refreshFood, useCopyMeal, useMeals } from "@/lib/useMeals";
 import type { DeltaResult, Goal } from "@/lib/delta";
@@ -399,6 +403,8 @@ export default function DashboardPage() {
 
       {progress && <DailyQuests quests={progress.quests} bonus={progress.questBonus} />}
 
+      <SuppsGlance />
+
       <section className="flex flex-col gap-3" aria-label="Quick add">
         <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-neutral-900/80 p-1.5 pl-4 shadow-soft transition focus-within:border-emerald-500/40">
           <input
@@ -593,6 +599,49 @@ function ActivitySummary({
         <span className="text-xs font-semibold text-neutral-500">Train ›</span>
       </Link>
     </section>
+  );
+}
+
+// Water + supplements at a glance; the full checklist lives on the Supps tab.
+function SuppsGlance() {
+  const { data } = useSupps();
+  const { units } = useUnits();
+  if (!data) return null;
+  const now = currentTime(new Date().getHours());
+  const due = data.supplements.filter((s) => !s.takenAt && s.timeOfDay === now);
+  const taken = data.supplements.filter((s) => s.takenAt).length;
+  return (
+    <Link
+      href="/supplements"
+      className="flex items-center gap-4 rounded-2xl border border-white/5 bg-neutral-900/80 p-4 shadow-soft transition hover:border-white/15"
+      aria-label="Water and supplements"
+    >
+      <ActivityRing
+        rings={[{ label: "Water", value: data.waterMl, goal: data.waterGoalMl, from: "#67e8f9", to: "#06b6d4" }]}
+        size={44}
+        stroke={6}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold text-cyan-400">Water</span>
+        <span className="block text-sm font-semibold tabular-nums text-white">
+          {waterNumber(data.waterMl, units).toLocaleString()}
+          <span className="font-medium text-neutral-500">
+            /{formatWater(data.waterGoalMl, units)}
+          </span>
+        </span>
+      </span>
+      {data.supplements.length > 0 && (
+        <span className="min-w-0 text-right">
+          <span className="block text-xs font-semibold text-emerald-400">Supplements</span>
+          <span className={`block truncate text-sm font-semibold ${due.length ? "text-amber-300" : "text-white"}`}>
+            {due.length ? `${due[0].name} due` : `${taken}/${data.supplements.length} taken`}
+          </span>
+        </span>
+      )}
+      <span className="text-neutral-600" aria-hidden>
+        ›
+      </span>
+    </Link>
   );
 }
 

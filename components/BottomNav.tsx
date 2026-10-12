@@ -9,24 +9,25 @@ import { SpeedDial } from "./SpeedDial";
 const ICONS: Record<string, JSX.Element> = {
   today: <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" />,
   train: <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />,
-  history: (
+  supps: (
     <>
-      <rect x="4" y="4" width="16" height="16" rx="3" />
-      <path d="m4 15 4-4 5 5 2-2 5 5" />
-      <circle cx="15.5" cy="8.5" r="1.5" />
+      <rect x="3.5" y="9" width="17" height="6.5" rx="3.25" transform="rotate(-40 12 12.25)" />
+      <path d="m9.6 9.4 4.9 5.8" />
     </>
   ),
-  insights: <path d="M4 19V5M4 19h16M8 15l3.5-4 3 2.5L20 7" />,
+  progress: <path d="M4 19V5M4 19h16M8 15l3.5-4 3 2.5L20 7" />,
 };
 
-type Tab = { href: string; label: string; icon: string };
+// `match` lists every route that should light the tab up.
+type Tab = { href: string; label: string; icon: string; match: string[] };
 const LEFT: Tab[] = [
-  { href: "/dashboard", label: "Today", icon: "today" },
-  { href: "/train", label: "Train", icon: "train" },
+  { href: "/dashboard", label: "Today", icon: "today", match: ["/dashboard", "/diary", "/log"] },
+  { href: "/train", label: "Train", icon: "train", match: ["/train"] },
 ];
 const RIGHT: Tab[] = [
-  { href: "/history", label: "History", icon: "history" },
-  { href: "/insights", label: "Insights", icon: "insights" },
+  { href: "/supplements", label: "Supps", icon: "supps", match: ["/supplements"] },
+  // Trends (Insights) and Photos (History) share one tab with a switch at the top.
+  { href: "/insights", label: "Progress", icon: "progress", match: ["/insights", "/history"] },
 ];
 
 export function BottomNav() {
@@ -36,7 +37,7 @@ export function BottomNav() {
   useEffect(() => setDialOpen(false), [pathname]);
 
   const tab = (t: Tab) => {
-    const active = pathname?.startsWith(t.href);
+    const active = t.match.some((m) => pathname?.startsWith(m));
     return (
       <Link
         key={t.href}

@@ -48,6 +48,22 @@ export function displayToKm(value: number, u: UnitSystem) {
   return tidy(u === "metric" ? value : value * KM_PER_MI);
 }
 
+// Water: stored in ml, shown in US fl oz (imperial) or ml / L.
+export const ML_PER_OZ = 29.5735;
+export function formatWater(ml: number, u: UnitSystem) {
+  if (u === "imperial") return `${Math.round(ml / ML_PER_OZ).toLocaleString()} oz`;
+  return ml >= 1000 ? `${(ml / 1000).toFixed(1)} L` : `${Math.round(ml)} ml`;
+}
+export function waterNumber(ml: number, u: UnitSystem) {
+  return u === "imperial" ? Math.round(ml / ML_PER_OZ) : Math.round(ml);
+}
+export function waterUnit(u: UnitSystem) {
+  return u === "imperial" ? "oz" : "ml";
+}
+export function displayToMl(value: number, u: UnitSystem) {
+  return Math.round(u === "imperial" ? value * ML_PER_OZ : value);
+}
+
 export function cmToFeetInches(cm: number): { ft: number; in: number } {
   const totalIn = Math.round(cm / CM_PER_IN);
   return { ft: Math.floor(totalIn / 12), in: totalIn % 12 };

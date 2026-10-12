@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendAreaChart } from "@/components/charts/TrendAreaChart";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { UnitToggle } from "@/components/UnitToggle";
+import { ProgressSwitch } from "@/components/ProgressSwitch";
 import { useUnits } from "@/lib/useUnits";
 import { displayToLb, lbToDisplay, weightUnit } from "@/lib/units";
 
@@ -91,6 +92,7 @@ export default function InsightsPage() {
 
   return (
     <main className="flex flex-col gap-5 pb-4">
+      <ProgressSwitch active="trends" />
       <header>
         <div className="flex items-center justify-between gap-3">
           <h1 className="m-0 text-3xl font-semibold tracking-tight text-white">Insights</h1>

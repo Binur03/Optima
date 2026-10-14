@@ -41,5 +41,6 @@ export const config = {
     "/progress/:path*",
     "/insights/:path*",
     "/supplements/:path*",
+    "/plan/:path*",
   ],
 };

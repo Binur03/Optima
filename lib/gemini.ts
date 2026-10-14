@@ -57,14 +57,14 @@ const TEXT_PROMPT = (query: string) =>
 // lookups, so thinking is off (~90% fewer tokens, ~3–6× faster) and each call
 // gets an output cap sized to its JSON with headroom (a truncated answer fails
 // JSON.parse and surfaces as a normal "try again" error).
-const OUTPUT_CAP = { single: 256, items: 1024, suggestions: 512, insight: 400 } as const;
+const OUTPUT_CAP = { single: 256, items: 1024, suggestions: 512, insight: 400, plan: 2500 } as const;
 
-function config(maxOutputTokens: number, schema?: object) {
+function config(maxOutputTokens: number, schema?: object, thinkingBudget = 0) {
   return {
     ...(schema ? { responseMimeType: "application/json", responseSchema: schema } : {}),
-    maxOutputTokens,
+    maxOutputTokens: maxOutputTokens + thinkingBudget, // thinking tokens count toward the cap
     // Not in this SDK's types yet; passed straight through to the API.
-    thinkingConfig: { thinkingBudget: 0 },
+    thinkingConfig: { thinkingBudget },
   } as object;
 }
 
@@ -257,6 +257,110 @@ export async function analyzeMealItems(text: string): Promise<MacroEstimate[]> {
   // Drop empty/zeroed items (e.g. "a black coffee" → all ~0 is fine to keep only
   // if it has a name; but drop rows with no name).
   return items.filter((i) => i.food_name && i.food_name !== "Unknown item");
+}
+
+// ---------- Meal planner: meals from the user's pantry, sized to a budget ----------
+const PLAN_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    options: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING },
+          summary: { type: SchemaType.STRING },
+          prep_minutes: { type: SchemaType.NUMBER },
+          calories: { type: SchemaType.NUMBER },
+          protein_g: { type: SchemaType.NUMBER },
+          carbs_g: { type: SchemaType.NUMBER },
+          fat_g: { type: SchemaType.NUMBER },
+          ingredients: {
+            type: SchemaType.ARRAY,
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                item: { type: SchemaType.STRING },
+                amount: { type: SchemaType.STRING },
+                from_pantry: { type: SchemaType.BOOLEAN },
+              },
+              required: ["item", "amount", "from_pantry"],
+            },
+          },
+          steps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        },
+        required: ["name", "summary", "prep_minutes", "calories", "protein_g", "carbs_g", "fat_g", "ingredients", "steps"],
+      },
+    },
+  },
+  required: ["options"],
+} as const;
+
+export interface PlannedMeal {
+  name: string;
+  summary: string;
+  prepMinutes: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  ingredients: { item: string; amount: string; fromPantry: boolean }[];
+  steps: string[];
+}
+
+export async function planMeals(input: {
+  slot: "breakfast" | "lunch" | "dinner";
+  budget: { calories: number; protein: number; carbs: number; fat: number };
+  pantry: string[];
+  avoid: string[]; // recently eaten or already shown — keeps the options varied
+  count?: number;
+}): Promise<PlannedMeal[]> {
+  const { slot, budget, pantry, avoid, count = 3 } = input;
+  const prompt =
+    `You are a practical meal planner. Create ${count} distinct ${slot} options. ` +
+    (pantry.length
+      ? `Build them mainly from ingredients the user already has: ${pantry.join(", ")}. `
+      : "The user hasn't listed ingredients, so use common, easy-to-find groceries. ") +
+    "Basic staples are always available: salt, pepper, cooking oil or spray, common dried spices, and water. " +
+    `Each option must come in close to this target for the ONE meal: ${budget.calories} kcal, ` +
+    `${budget.protein} g protein, ${budget.carbs} g carbs, ${budget.fat} g fat (stay within about 10%, protein first). ` +
+    "Give exact amounts (grams, cups, pieces) and scale portions so the numbers really add up. " +
+    "Make the three clearly different from each other: different main protein or cooking style, and suit the time of day. " +
+    (avoid.length ? `Do not suggest these or near-copies of them: ${avoid.join("; ")}. ` : "") +
+    "Mark each ingredient from_pantry=true only if it is in the user's list. Keep steps to at most 5 short lines, " +
+    "summary to one sentence, and use realistic nutrition data. No markdown.";
+
+  const text = await runWithFallback(async (modelId) => {
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      // A small thinking budget helps the portions actually add up to the target.
+      generationConfig: config(OUTPUT_CAP.plan, PLAN_SCHEMA as unknown as object, 512),
+    });
+    return (await model.generateContent(prompt)).response.text();
+  });
+
+  const parsed = JSON.parse(text) as { options?: Record<string, unknown>[] };
+  const n = (v: unknown) => {
+    const x = Number(v);
+    return Number.isFinite(x) && x >= 0 ? Math.round(x) : 0;
+  };
+  return (parsed.options ?? [])
+    .filter((o) => typeof o.name === "string" && o.name)
+    .slice(0, count)
+    .map((o) => ({
+      name: String(o.name).slice(0, 100),
+      summary: String(o.summary ?? "").slice(0, 200),
+      prepMinutes: n(o.prep_minutes),
+      calories: n(o.calories),
+      protein: n(o.protein_g),
+      carbs: n(o.carbs_g),
+      fat: n(o.fat_g),
+      ingredients: (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 15).map((i) => {
+        const r = i as Record<string, unknown>;
+        return { item: String(r.item ?? ""), amount: String(r.amount ?? ""), fromPantry: Boolean(r.from_pantry) };
+      }),
+      steps: (Array.isArray(o.steps) ? o.steps : []).slice(0, 6).map((s) => String(s).slice(0, 200)),
+    }));
 }
 
 // ---------- Weekly AI coaching insight ----------

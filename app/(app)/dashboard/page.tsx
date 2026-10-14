@@ -405,6 +405,26 @@ export default function DashboardPage() {
 
       <SuppsGlance />
 
+      <Link
+        href="/plan"
+        className="flex items-center gap-4 rounded-2xl border border-white/5 bg-gradient-to-br from-amber-400/[0.08] via-neutral-900/80 to-neutral-900/80 p-4 shadow-soft transition hover:border-white/15"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-xl" aria-hidden>
+          🧑‍🍳
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold text-white">Plan my next meal</span>
+          <span className="block text-xs text-neutral-400">
+            {data.delta.remaining != null && data.delta.remaining > 0
+              ? `${data.delta.remaining.toLocaleString()} kcal left · cook from what you have`
+              : "Meal ideas from the ingredients you have"}
+          </span>
+        </span>
+        <span className="text-neutral-600" aria-hidden>
+          ›
+        </span>
+      </Link>
+
       <section className="flex flex-col gap-3" aria-label="Quick add">
         <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-neutral-900/80 p-1.5 pl-4 shadow-soft transition focus-within:border-emerald-500/40">
           <input

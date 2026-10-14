@@ -243,7 +243,13 @@ export default function DiaryPage() {
       {isToday && (
         <section className="rounded-3xl border border-white/5 bg-gradient-to-br from-emerald-500/[0.08] via-neutral-900/80 to-neutral-900/80 p-5">
           <h2 className="m-0 text-sm font-semibold text-white">Macro Assistant</h2>
-          <p className="m-0 mt-1 text-xs text-neutral-500">Meal ideas that fit what you have left today.</p>
+          <p className="m-0 mt-1 text-xs text-neutral-500">
+            Meal ideas that fit what you have left today. For full recipes from your own ingredients, use the{" "}
+            <Link href="/plan" className="font-semibold text-emerald-400">
+              Meal Planner
+            </Link>
+            .
+          </p>
           <button
             type="button"
             onClick={() => assist.mutate()}

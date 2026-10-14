@@ -21,7 +21,7 @@ const ICONS: Record<string, JSX.Element> = {
 // `match` lists every route that should light the tab up.
 type Tab = { href: string; label: string; icon: string; match: string[] };
 const LEFT: Tab[] = [
-  { href: "/dashboard", label: "Today", icon: "today", match: ["/dashboard", "/diary", "/log"] },
+  { href: "/dashboard", label: "Today", icon: "today", match: ["/dashboard", "/diary", "/log", "/plan"] },
   { href: "/train", label: "Train", icon: "train", match: ["/train"] },
 ];
 const RIGHT: Tab[] = [

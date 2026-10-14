@@ -91,6 +91,7 @@ model User {
   supplements    Supplement[]
   supplementLogs SupplementLog[]
   waterLogs      WaterLog[]
+  pantryItems    PantryItem[]
   progressPhotos ProgressPhoto[]
   weightLogs     WeightLog[]
   achievements   Achievement[]
@@ -275,6 +276,18 @@ model WaterLog {
 
   @@index([userId, logDate])
   @@map("water_logs")
+}
+
+// Ingredients the user has on hand — the meal planner cooks from these.
+model PantryItem {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, name])
+  @@map("pantry_items")
 }
 
 // ---------- Progress ----------

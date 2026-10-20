@@ -8,6 +8,7 @@ import type { SplitsData } from "@/components/ExerciseCard";
 import { SplitSheet } from "@/components/SplitSheet";
 import { send, trainError } from "@/lib/trainApi";
 import type { ExerciseKind } from "@/lib/lifts";
+import { DuplicateBanner, LiftDatalist, refreshLifts, useMergeLifts } from "@/components/LiftTools";
 
 type Day = SplitsData["splits"][number];
 
@@ -33,10 +34,7 @@ export default function ProgramEditorPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Every change here can alter what Train shows, so refresh both views.
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["lift-splits"] });
-    qc.invalidateQueries({ queryKey: ["lift-programs"] });
-  };
+  const refresh = () => refreshLifts(qc);
   const programUpdate = useMutation({
     mutationFn: (v: { name?: string; activate?: true }) => send(`/api/lifts/programs/${id}`, "PATCH", v),
     onSuccess: () => {
@@ -126,6 +124,9 @@ export default function ProgramEditorPage() {
         )}
       </header>
 
+      <DuplicateBanner />
+      <LiftDatalist id="my-lifts" />
+
       <section aria-label="Training days" className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between px-1">
           <h2 className="m-0 text-sm font-semibold text-white">Training days</h2>
@@ -204,6 +205,34 @@ function DayCard({
 }) {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
+  // Renaming a lift (applies on every day it's on). A name that's already
+  // taken offers to merge the two instead.
+  const [renamingEx, setRenamingEx] = useState<string | null>(null);
+  const [exName, setExName] = useState("");
+  const [clash, setClash] = useState<{ id: string; name: string } | null>(null);
+  const renameEx = useMutation({
+    mutationFn: async (v: { id: string; name: string }) => {
+      const res = await fetch(`/api/lifts/exercises/${v.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: v.name }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 409 && json.error === "name_taken") return { clash: { id: json.conflictId as string, name: json.conflictName as string } };
+      if (!res.ok) throw new Error(json.error ?? "rename_failed");
+      return { clash: null };
+    },
+    onSuccess: (r) => {
+      if (r.clash) return setClash(r.clash);
+      setRenamingEx(null);
+      onChanged();
+    },
+  });
+  const mergeEx = useMergeLifts(() => {
+    setRenamingEx(null);
+    setClash(null);
+    onChanged();
+  });
   const base = `/api/lifts/splits/${day.id}`;
 
   const update = useMutation({
@@ -286,9 +315,71 @@ function DayCard({
             <p className="m-0 px-1 pb-2 text-sm text-neutral-500">No exercises yet.</p>
           )}
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {day.exercises.map((e, i) => (
+            {day.exercises.map((e, i) =>
+              renamingEx === e.id ? (
+                <li key={e.id} className="rounded-xl bg-white/[0.03] p-2 ring-1 ring-inset ring-sky-400/30">
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(ev) => {
+                      ev.preventDefault();
+                      if (exName.trim().length >= 2 && exName.trim() !== e.name) renameEx.mutate({ id: e.id, name: exName.trim() });
+                      else setRenamingEx(null);
+                    }}
+                  >
+                    <input
+                      value={exName}
+                      onChange={(ev) => {
+                        setExName(ev.target.value);
+                        setClash(null);
+                      }}
+                      list="my-lifts"
+                      maxLength={60}
+                      autoFocus
+                      aria-label={`Rename ${e.name}`}
+                      className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-sky-400/50 focus:outline-none"
+                    />
+                    <button type="submit" disabled={renameEx.isPending} className="rounded-lg bg-white/[0.08] px-3 py-2 text-xs font-semibold text-white">
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setRenamingEx(null)} className="px-1 text-xs font-semibold text-neutral-500 hover:text-white">
+                      Cancel
+                    </button>
+                  </form>
+                  {clash && (
+                    <div className="mt-2 rounded-lg bg-sky-400/10 p-2.5 text-xs text-sky-100">
+                      You already have <strong>{clash.name}</strong>. Merge {e.name} into it? Every set from both is kept and it’ll
+                      show the same history on every day.
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={mergeEx.isPending}
+                          onClick={() => mergeEx.mutate({ fromId: e.id, intoId: clash.id })}
+                          className="rounded-md bg-sky-400 px-3 py-1.5 font-semibold text-zinc-950 disabled:opacity-50"
+                        >
+                          Merge into {clash.name}
+                        </button>
+                        <button type="button" onClick={() => setClash(null)} className="px-2 font-semibold text-neutral-400 hover:text-white">
+                          Pick another name
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {(renameEx.isError || mergeEx.isError) && <p role="alert" className="m-0 mt-1.5 text-xs text-rose-400">Couldn’t save that. Try again.</p>}
+                </li>
+              ) : (
               <li key={e.id} className="flex items-center gap-1 rounded-xl bg-white/[0.03] py-1 pl-3 pr-1">
-                <span className="min-w-0 flex-1 truncate text-sm text-white">{e.name}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRenamingEx(e.id);
+                    setExName(e.name);
+                    setClash(null);
+                  }}
+                  title="Tap to rename"
+                  className="min-w-0 flex-1 truncate text-left text-sm text-white underline-offset-2 hover:underline"
+                >
+                  {e.name}
+                </button>
                 <button
                   type="button"
                   onClick={() => setKind.mutate({ exerciseId: e.id, kind: NEXT_KIND[e.kind] })}
@@ -327,7 +418,8 @@ function DayCard({
                   ×
                 </button>
               </li>
-            ))}
+              )
+            )}
           </ul>
 
           <form
@@ -341,6 +433,7 @@ function DayCard({
               value={newName}
               onChange={(ev) => setNewName(ev.target.value)}
               placeholder="Add exercise"
+              list="my-lifts"
               maxLength={60}
               className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
             />

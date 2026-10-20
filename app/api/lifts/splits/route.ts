@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
           id: e.id,
           name: e.name,
           kind: e.kind,
+          // Other days in this program with the same lift — they share its history.
+          sharedWith: splits.filter((o) => o.id !== s.id && o.items.some((i) => i.exercise.id === e.id)).map((o) => o.name),
           today: todayBy.get(e.id) ?? [],
           last: last ? { date: isoDay(last.logDate), sets: parseSets(last.sets) } : null,
         };

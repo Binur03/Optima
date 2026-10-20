@@ -16,6 +16,7 @@ export interface ExerciseView {
   id: string;
   name: string;
   kind: ExerciseKind;
+  sharedWith?: string[]; // other days with this lift (same history)
   today: LiftSet[];
   last: { date: string; sets: LiftSet[] } | null;
 }
@@ -190,6 +191,14 @@ export function ExerciseCard({ exercise, defaultOpen = false, splitId, equipment
             )}
           </span>
           <span className={`block text-xs ${done.length ? "text-emerald-400" : "text-neutral-500"}`}>{subtitle}</span>
+          {exercise.sharedWith && exercise.sharedWith.length > 0 && (
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-sky-300/80">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+              </svg>
+              Also on {exercise.sharedWith.join(", ")} · shared history
+            </span>
+          )}
         </span>
         <svg
           viewBox="0 0 24 24"

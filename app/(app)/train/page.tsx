@@ -8,6 +8,7 @@ import { ProgramSheet } from "@/components/ProgramSheet";
 import { formatDay } from "@/components/charts/GlassTooltip";
 import { send } from "@/lib/trainApi";
 import { CardioCard } from "@/components/CardioCard";
+import { DuplicateBanner, LiftDatalist, refreshLifts } from "@/components/LiftTools";
 import { totalVolume, type Equipment } from "@/lib/lifts";
 
 const EQUIPMENT: { key: Equipment; label: string; icon: string }[] = [
@@ -89,7 +90,7 @@ export default function TrainPage() {
     mutationFn: (name: string) => send(`/api/lifts/splits/${active?.id}/exercises`, "POST", { name }),
     onSuccess: () => {
       setNewName("");
-      qc.invalidateQueries({ queryKey: ["lift-splits"] });
+      refreshLifts(qc);
     },
   });
 
@@ -186,6 +187,9 @@ export default function TrainPage() {
         </div>
       ) : (
         <>
+          <DuplicateBanner />
+          <LiftDatalist id="my-lifts" />
+
           {/* Days wrap onto extra rows instead of scrolling sideways, so every day stays visible. */}
           <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Training day">
             {data.splits.map((s) => {
@@ -242,6 +246,7 @@ export default function TrainPage() {
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder={`Add an exercise to ${active.name}`}
+                  list="my-lifts"
                   maxLength={60}
                   className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
                 />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
 import { analyzeMealItems } from "@/lib/gemini";
+import { withAiContext } from "@/lib/metering";
 import { localDateOnly } from "@/lib/datetime";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   const logDate = localDateOnly(user.timezone);
 
   try {
-    const items = await analyzeMealItems(text);
+    const items = await withAiContext({ userId }, () => analyzeMealItems(text));
     if (items.length === 0) {
       return NextResponse.json({ error: "no_items" }, { status: 422 });
     }

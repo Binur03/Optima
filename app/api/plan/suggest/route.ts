@@ -5,6 +5,7 @@ import { addDays, localDateOnly } from "@/lib/datetime";
 import { computeTarget } from "@/lib/tdee";
 import { defaultMacroTargets } from "@/lib/nutrition";
 import { planMeals } from "@/lib/gemini";
+import { withAiContext } from "@/lib/metering";
 import { isSlot, remainingMacros, slotBudget } from "@/lib/mealPlan";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
@@ -77,12 +78,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const options = await planMeals({
-      slot,
-      budget,
-      pantry: pantry.map((p) => p.name),
-      avoid: [...new Set([...recent.map((r) => r.foodName), ...exclude])],
-    });
+    const options = await withAiContext({ userId }, () =>
+      planMeals({
+        slot,
+        budget,
+        pantry: pantry.map((p) => p.name),
+        avoid: [...new Set([...recent.map((r) => r.foodName), ...exclude])],
+      })
+    );
     return NextResponse.json({ slot, remaining, budget, closesDay, options, done: false });
   } catch (err) {
     console.error("[plan/suggest] failed:", err instanceof Error ? err.message : err);

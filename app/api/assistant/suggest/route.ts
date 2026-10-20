@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/auth";
 import { computeTarget } from "@/lib/tdee";
 import { macroTargetsFromCalories, remainingMacros } from "@/lib/macros";
 import { suggestMeals } from "@/lib/gemini";
+import { withAiContext } from "@/lib/metering";
 import { localDateOnly } from "@/lib/datetime";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const suggestions = await suggestMeals(remaining);
+    const suggestions = await withAiContext({ userId }, () => suggestMeals(remaining));
     return NextResponse.json({ remaining, macroTarget, suggestions });
   } catch (err) {
     const rateLimited = err instanceof Error && /429|rate|quota|resource_exhausted/i.test(err.message);

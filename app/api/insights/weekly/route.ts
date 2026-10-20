@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/auth";
 import { computeTarget } from "@/lib/tdee";
 import { defaultMacroTargets } from "@/lib/nutrition";
 import { weeklyInsight, type WeeklyStat } from "@/lib/gemini";
+import { withAiContext } from "@/lib/metering";
 import { localDateOnly } from "@/lib/datetime";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
@@ -88,7 +89,8 @@ export async function GET(req: NextRequest) {
       : defaultMacroTargets(target.targetIntake);
 
   try {
-    const insight = await weeklyInsight({ calorieTarget: target.targetIntake, macroTargets, days });
+    const calorieTarget = target.targetIntake;
+    const insight = await withAiContext({ userId }, () => weeklyInsight({ calorieTarget, macroTargets, days }));
     await prisma.user.update({
       where: { id: userId },
       data: { weeklyInsight: insight, weeklyInsightAt: new Date() },

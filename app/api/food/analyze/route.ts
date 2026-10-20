@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeMealImage, analyzeFoodText } from "@/lib/gemini";
 import { getCurrentUserId } from "@/lib/auth";
+import { withAiContext } from "@/lib/metering";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
 export const maxDuration = 30;
@@ -40,9 +41,11 @@ export async function POST(req: NextRequest) {
       if (approxBytes(imageBase64) > MAX_BYTES) {
         return NextResponse.json({ error: "image_too_large" }, { status: 413 });
       }
-      estimate = await analyzeMealImage(imageBase64, mimeType, contextText || undefined);
+      estimate = await withAiContext({ userId }, () =>
+        analyzeMealImage(imageBase64, mimeType, contextText || undefined)
+      );
     } else {
-      estimate = await analyzeFoodText(contextText);
+      estimate = await withAiContext({ userId }, () => analyzeFoodText(contextText));
     }
     return NextResponse.json({ estimate });
   } catch (err) {

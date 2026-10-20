@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeFoodText } from "@/lib/gemini";
 import { getCurrentUserId } from "@/lib/auth";
+import { withAiContext } from "@/lib/metering";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
 export const maxDuration = 30;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const estimate = await analyzeFoodText(query);
+    const estimate = await withAiContext({ userId }, () => analyzeFoodText(query));
     return NextResponse.json({ estimate });
   } catch (err) {
     const status = isRateLimit(err) ? 429 : 502;

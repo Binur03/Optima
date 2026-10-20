@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeMealImage } from "@/lib/gemini";
 import { getCurrentUserId } from "@/lib/auth";
+import { withAiContext } from "@/lib/metering";
 
 // AI calls (plus a fallback retry) can outlast the default function timeout.
 export const maxDuration = 30;
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const estimate = await analyzeMealImage(imageBase64, mimeType);
+    const estimate = await withAiContext({ userId }, () => analyzeMealImage(imageBase64, mimeType));
     return NextResponse.json({ estimate });
   } catch (err) {
     // Signal the UI to fall back to text-search / manual entry — the photo is

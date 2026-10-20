@@ -1,4 +1,6 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type GenerateContentResult } from "@google/generative-ai";
+import { waitUntil } from "@vercel/functions";
+import { meterAttempt, type AiTask, type AttemptRecord } from "@/lib/metering";
 
 // Confirmed by product: gemini-3.6-flash is the standard for low-latency
 // multimodal + structured JSON. Fallback covers SDK/API pins to 2.5.
@@ -82,10 +84,39 @@ function getModel(modelId: string) {
 // than paying a failed round trip on every request (per server instance).
 let primaryCoolUntil = 0;
 
-async function runWithFallback(run: (modelId: string) => Promise<string>): Promise<string> {
+type Run = (modelId: string) => Promise<GenerateContentResult>;
+
+// One model call, metered to Revenium whether it succeeds or fails. The
+// metering request runs after the response is sent (waitUntil), so users
+// never wait on it.
+async function attempt(task: AiTask, run: Run, modelId: string, n: number): Promise<string> {
+  const startedAt = new Date();
+  try {
+    const result = await run(modelId);
+    const endedAt = new Date();
+    waitUntil(
+      meterAttempt({
+        task,
+        model: modelId,
+        attempt: n,
+        startedAt,
+        endedAt,
+        usage: result.response.usageMetadata as AttemptRecord["usage"],
+        finishReason: result.response.candidates?.[0]?.finishReason,
+      })
+    );
+    return result.response.text();
+  } catch (error) {
+    waitUntil(meterAttempt({ task, model: modelId, attempt: n, startedAt, endedAt: new Date(), error }));
+    throw error;
+  }
+}
+
+async function runWithFallback(task: AiTask, run: Run): Promise<string> {
+  let n = 0;
   if (Date.now() >= primaryCoolUntil) {
     try {
-      return await run(GEMINI_MODEL_ID);
+      return await attempt(task, run, GEMINI_MODEL_ID, n++);
     } catch (err) {
       if (!isModelNotFound(err) && !isRetryable(err)) throw err;
       if (isRetryable(err)) primaryCoolUntil = Date.now() + 60_000;
@@ -93,11 +124,11 @@ async function runWithFallback(run: (modelId: string) => Promise<string>): Promi
     }
   }
   try {
-    return await run(GEMINI_FALLBACK_MODEL_ID);
+    return await attempt(task, run, GEMINI_FALLBACK_MODEL_ID, n++);
   } catch (err) {
     if (!isRetryable(err)) throw err;
     await new Promise((r) => setTimeout(r, 1200));
-    return run(GEMINI_FALLBACK_MODEL_ID);
+    return attempt(task, run, GEMINI_FALLBACK_MODEL_ID, n++);
   }
 }
 
@@ -105,8 +136,8 @@ function errMessage(err: unknown) {
   return (err instanceof Error ? err.message : String(err)).slice(0, 200);
 }
 
-async function withFallback(run: (modelId: string) => Promise<string>): Promise<MacroEstimate> {
-  return sanitize(JSON.parse(await runWithFallback(run)));
+async function withFallback(task: AiTask, run: Run): Promise<MacroEstimate> {
+  return sanitize(JSON.parse(await runWithFallback(task, run)));
 }
 
 export async function analyzeMealImage(
@@ -116,20 +147,13 @@ export async function analyzeMealImage(
 ): Promise<MacroEstimate> {
   const ctx = contextText?.trim();
   const prompt = ctx ? IMAGE_PROMPT_WITH_CONTEXT(ctx) : IMAGE_PROMPT;
-  return withFallback(async (modelId) => {
-    const result = await getModel(modelId).generateContent([
-      { text: prompt },
-      { inlineData: { mimeType, data: base64Image } },
-    ]);
-    return result.response.text();
-  });
+  return withFallback("food-photo", (modelId) =>
+    getModel(modelId).generateContent([{ text: prompt }, { inlineData: { mimeType, data: base64Image } }])
+  );
 }
 
 export async function analyzeFoodText(query: string): Promise<MacroEstimate> {
-  return withFallback(async (modelId) => {
-    const result = await getModel(modelId).generateContent(TEXT_PROMPT(query));
-    return result.response.text();
-  });
+  return withFallback("food-text", (modelId) => getModel(modelId).generateContent(TEXT_PROMPT(query)));
 }
 
 // Defensive: clamp negatives, coerce to finite numbers even under responseSchema.
@@ -197,13 +221,11 @@ export async function suggestMeals(remaining: {
     "'food' is the food + portion (e.g. '1.5 cups Greek yogurt + a handful of almonds'), and " +
     "'why' is the approximate macros it adds (e.g. '~30g protein, 12g fat'). Keep it common and practical.";
 
-  const text = await runWithFallback(async (modelId) => {
-    const model = genAI.getGenerativeModel({
-      model: modelId,
-      generationConfig: config(OUTPUT_CAP.suggestions, SUGGESTION_SCHEMA as unknown as object),
-    });
-    return (await model.generateContent(prompt)).response.text();
-  });
+  const text = await runWithFallback("meal-ideas", (modelId) =>
+    genAI
+      .getGenerativeModel({ model: modelId, generationConfig: config(OUTPUT_CAP.suggestions, SUGGESTION_SCHEMA as unknown as object) })
+      .generateContent(prompt)
+  );
 
   const parsed = JSON.parse(text) as { suggestions?: MealSuggestion[] };
   return Array.isArray(parsed.suggestions)
@@ -244,13 +266,11 @@ const NLP_PROMPT = (text: string) =>
 
 // Parses a free-text/dictated meal into one estimate per food item.
 export async function analyzeMealItems(text: string): Promise<MacroEstimate[]> {
-  const raw = await runWithFallback(async (modelId) => {
-    const model = genAI.getGenerativeModel({
-      model: modelId,
-      generationConfig: config(OUTPUT_CAP.items, ITEMS_SCHEMA as unknown as object),
-    });
-    return (await model.generateContent(NLP_PROMPT(text))).response.text();
-  });
+  const raw = await runWithFallback("meal-items", (modelId) =>
+    genAI
+      .getGenerativeModel({ model: modelId, generationConfig: config(OUTPUT_CAP.items, ITEMS_SCHEMA as unknown as object) })
+      .generateContent(NLP_PROMPT(text))
+  );
 
   const parsed = JSON.parse(raw) as { items?: MacroEstimate[] };
   const items = Array.isArray(parsed.items) ? parsed.items.map(sanitize) : [];
@@ -330,14 +350,15 @@ export async function planMeals(input: {
     "Mark each ingredient from_pantry=true only if it is in the user's list. Keep steps to at most 5 short lines, " +
     "summary to one sentence, and use realistic nutrition data. No markdown.";
 
-  const text = await runWithFallback(async (modelId) => {
-    const model = genAI.getGenerativeModel({
-      model: modelId,
-      // A small thinking budget helps the portions actually add up to the target.
-      generationConfig: config(OUTPUT_CAP.plan, PLAN_SCHEMA as unknown as object, 512),
-    });
-    return (await model.generateContent(prompt)).response.text();
-  });
+  const text = await runWithFallback("meal-plan", (modelId) =>
+    genAI
+      .getGenerativeModel({
+        model: modelId,
+        // A small thinking budget helps the portions actually add up to the target.
+        generationConfig: config(OUTPUT_CAP.plan, PLAN_SCHEMA as unknown as object, 512),
+      })
+      .generateContent(prompt)
+  );
 
   const parsed = JSON.parse(text) as { options?: Record<string, unknown>[] };
   const n = (v: unknown) => {
@@ -386,9 +407,8 @@ export async function weeklyInsight(payload: {
     "genuine positive trend (reference real numbers, e.g. days they hit protein) and ONE " +
     "area to improve. Plain text only — no preamble, no markdown, no bullet points.";
 
-  const text = await runWithFallback(async (modelId) => {
-    const model = genAI.getGenerativeModel({ model: modelId, generationConfig: config(OUTPUT_CAP.insight) });
-    return (await model.generateContent(prompt)).response.text();
-  });
+  const text = await runWithFallback("weekly-insight", (modelId) =>
+    genAI.getGenerativeModel({ model: modelId, generationConfig: config(OUTPUT_CAP.insight) }).generateContent(prompt)
+  );
   return text.trim();
 }

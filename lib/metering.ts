@@ -21,6 +21,7 @@ interface AiContext {
 }
 
 const store = new AsyncLocalStorage<AiContext>();
+let warnedNoKey = false;
 
 // Wrap a route's AI work so every call inside is attributed to this user.
 export function withAiContext<T>(ctx: { userId?: string; tags?: AiContext["tags"] }, fn: () => Promise<T>): Promise<T> {
@@ -56,7 +57,11 @@ function errorInfo(err: unknown) {
 
 export async function meterAttempt(rec: AttemptRecord): Promise<void> {
   const key = process.env.REVENIUM_METERING_API_KEY;
-  if (!key) return;
+  if (!key) {
+    if (!warnedNoKey) console.warn("[metering] REVENIUM_METERING_API_KEY not set; not metering");
+    warnedNoKey = true;
+    return;
+  }
   const ctx = store.getStore();
   const u = rec.usage ?? {};
   const input = u.promptTokenCount ?? 0;
@@ -115,7 +120,8 @@ export async function meterAttempt(rec: AttemptRecord): Promise<void> {
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    if (!res.ok) console.warn(`[metering] Revenium ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (res.ok) console.log(`[metering] ${rec.task} ${rec.model} retry=${rec.attempt} → Revenium ${res.status}`);
+    else console.warn(`[metering] Revenium ${res.status}: ${(await res.text()).slice(0, 200)}`);
   } catch (e) {
     console.warn("[metering] not sent:", e instanceof Error ? e.message : e);
   } finally {

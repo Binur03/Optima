@@ -65,8 +65,10 @@ export async function meterAttempt(rec: AttemptRecord): Promise<void> {
   const ctx = store.getStore();
   const u = rec.usage ?? {};
   const input = u.promptTokenCount ?? 0;
-  const output = u.candidatesTokenCount ?? 0;
   const reasoning = u.thoughtsTokenCount ?? 0;
+  // Gemini reports thinking apart from the answer, but bills it as output; Revenium
+  // prices outputTokenCount (OpenAI-style, reasoning included), so count it there.
+  const output = (u.candidatesTokenCount ?? 0) + reasoning;
   const failed = rec.error !== undefined;
   const err = failed ? errorInfo(rec.error) : null;
 
@@ -76,7 +78,7 @@ export async function meterAttempt(rec: AttemptRecord): Promise<void> {
     provider: "Google",
     inputTokenCount: input,
     outputTokenCount: output,
-    totalTokenCount: u.totalTokenCount ?? input + output + reasoning,
+    totalTokenCount: u.totalTokenCount ?? input + output,
     stopReason: failed ? "ERROR" : (STOP[rec.finishReason ?? "STOP"] ?? "END"),
     requestTime: rec.startedAt.toISOString(),
     completionStartTime: rec.endedAt.toISOString(), // non-streaming: the whole answer arrives at once
